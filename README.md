@@ -14,6 +14,8 @@ finished.
 g++ src/cimple.cpp -o cimple -O2 -std=c++20
 ```
 
+*Recommended to use a Rust highlighter.*
+
 
 ## Syntax
 
