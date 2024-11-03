@@ -8,6 +8,12 @@ a system compiler, like GCC. Currently, the transpilation
 is a simple code transformation that has not been fully
 finished.
 
+## Quickstart
+
+```bash
+g++ src/cimply.cpp -o cimply -O2 -std=c++20
+```
+
 
 ## Syntax
 
