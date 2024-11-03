@@ -69,8 +69,8 @@ struct Point {
     double x;
     double y;
     Point(double x, double y) {
-        this.x = x;
-        this.y = y;
+        self.x = x;
+        self.y = y;
     }
 }
 ```
@@ -121,7 +121,9 @@ caught if an unbound variable is being accessed. However,
 deletion timing may occur at any point in the code.
 
 
-THe following example uses the `shared` handler to
+The following snippet demonstrates usage of the 
+`shared` handler. To begin with, shared struct instances
+are explicitly declared.
 
 
 ```cpp
@@ -130,7 +132,7 @@ struct LinkedNode {
     double value;
     shared[LinkedNode] next;
     shared[LinkedNode] prev;
-    LinkedNode(var value) {
+    LinkedNode(double value) {
         self.value = value;
     }
 };
