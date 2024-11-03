@@ -32,10 +32,10 @@ Here is an example:
 
 ```rust
 // main.cm
-fn add(double x, double y) {
+func add(double x, double y) {
     return x+y;
 }
-fn main() {
+func main() {
     print(add(1,2));
 }
 ```
@@ -54,7 +54,7 @@ explicitly stating type. Here is an example:
 
 ```rust
 // main.cm
-fn main() {
+func main() {
     var str = "Hello world!";
     print(str);
 }
@@ -92,12 +92,12 @@ example.
 
 ```rust
 // main.cm (second part)
-fn add(Point a, Point b) {
+func add(Point a, Point b) {
     double x = a.x+b.x;
     double y = a.y+b.y;
     return Point(x,y);
 }
-fn main() {
+func main() {
     var a = Point(1, 2);
     var b = Point(1, 2);
     var c = add(a, b);
@@ -145,12 +145,12 @@ struct LinkedNode {
     }
 };
 
-fn set_next(shared[LinkedNode] from, shared[LinkedNode] to) {
+func set_next(shared[LinkedNode] from, shared[LinkedNode] to) {
     from.next = to;
     to.prev = from;
 }
 
-fn main() {
+func main() {
     var node1 = shared[LinkedNode](1);
     var node2 = shared[LinkedNode](2);
     var node3 = shared[LinkedNode](3);
@@ -189,7 +189,7 @@ You can also reserve vector memory, for example to handle arithmetics.
 Here is an example of using vectors:
 
 ```rust
-fn add(vector[double] x, vector[double] y) {
+func add(vector[double] x, vector[double] y) {
     if(x.size()!=y.size())
         throw std@runtime_error("Different vec sizes");
     var z = vector[double]();
@@ -198,7 +198,7 @@ fn add(vector[double] x, vector[double] y) {
         z.push(x[i]+y[i]);
     return z;
 }
-fn main() {
+func main() {
     var x = vector[double]({1,2,3,4});
     var y = vector[double]({1,2,3,4});
     var z = add(x,y);
