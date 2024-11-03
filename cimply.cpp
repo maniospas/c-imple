@@ -4,20 +4,22 @@
 #include <vector>
 #include <iostream>
 #include <unordered_set>
+#include <unordered_map>
+#include <cctype>
+#include <stdexcept>
 
 // g++ cimply.cpp -o cimply -O2 -std=c++20
-
 
 std::vector<std::string> tokenize(const std::string& content) {
     std::vector<std::string> tokens;
     std::string token;
     for (char c : content) {
-        if (std::isspace(c) || std::ispunct(c)) {
+        if (std::isspace(static_cast<unsigned char>(c)) || std::ispunct(static_cast<unsigned char>(c))) {
             if (!token.empty()) {
                 tokens.push_back(token);
                 token.clear();
             }
-            if (std::ispunct(c)) {
+            if (std::ispunct(static_cast<unsigned char>(c))) {
                 tokens.push_back(std::string(1, c));
             }
         } else {
@@ -30,12 +32,115 @@ std::vector<std::string> tokenize(const std::string& content) {
     return tokens;
 }
 
+
+// Primitive types that should not be converted to const Type&
+static std::unordered_set<std::string> primitiveTypes = {"int", "double", "bool"};
+
+// Recursive function to parse types with nesting
+std::string parseType(const std::vector<std::string>& tokens, int& pos, const std::unordered_set<std::string>& conceptNames, bool declaring, bool& isConstructorCall) {
+    if (pos >= tokens.size()) {
+        throw std::runtime_error("Unexpected end of tokens while parsing type.");
+    }
+    
+    std::string type = "";
+    while (pos < tokens.size()) {
+        std::string current = tokens[pos];
+
+        if (current == "vector" || current == "shared") {
+            std::string templateName;
+            bool isShared = (current == "shared");
+            pos++; // Move past 'vector' or 'shared'
+
+            if (pos >= tokens.size() || tokens[pos] != "[") {
+                throw std::runtime_error("Expected '[' after " + current);
+            }
+            pos++; // Move past '['
+
+            // Start parsing the nested type
+            std::string nestedType = parseType(tokens, pos, conceptNames, false, isConstructorCall);
+
+            // Expect closing ']'
+            if (pos >= tokens.size() || tokens[pos] != "]") {
+                throw std::runtime_error("Expected ']' after type parameters.");
+            }
+            pos++; // Move past ']'
+
+            // Check if the next token is '(' to determine if it's a constructor call
+            int lookahead = pos;
+            while (lookahead < tokens.size() && tokens[lookahead] == " ") {
+                lookahead++;
+            }
+            bool followedByParenthesis = (lookahead < tokens.size() && tokens[lookahead] == "(");
+
+            if (isShared && followedByParenthesis) {
+                // It's a constructor call
+                templateName = "make_safe_shared";
+                isConstructorCall = true;
+            } else {
+                // Regular type usage
+                if (isShared)
+                    templateName = "SafeSharedPtr";
+                else
+                    templateName = "SafeVector";
+            }
+
+            type += templateName + "<" + nestedType + ">";
+        }
+        else if (current == "[") {
+            pos++; // Move past '['
+            std::string nestedType = parseType(tokens, pos, conceptNames, false, isConstructorCall);
+            if (pos >= tokens.size() || tokens[pos] != "]") {
+                throw std::runtime_error("Expected ']' after '['");
+            }
+            pos++; // Move past ']'
+            type += "[" + nestedType + "]";
+        }
+        else if (current == ",") {
+            pos++; // Move past ','
+            type += ", ";
+        }
+        else if (current == "]" || current == ")" || current == ";") {
+            // End of type
+            break;
+        }
+        else if (current == "const" || current == "&" || current == "void") {
+            std::runtime_error("`"+current+"` are reserved for internal usage.");
+        }
+        else {
+            // Base type
+            if (current == "string") 
+                current = "std::string";
+        
+            // If declaring and the type is a function argument, append '&' unless it's a primitive type
+            if (declaring && !isConstructorCall) {
+                if (primitiveTypes.find(type) == primitiveTypes.end()) {
+                    // Not a primitive type, convert to const Type&
+                    type = "const " + type + "&";
+                }
+            }
+
+            type += current;
+            pos++;
+        }
+
+        // Handle multiple tokens for base types (e.g., 'unsigned int')
+        if (pos < tokens.size() && tokens[pos] == "int" && tokens[pos - 1] == "unsigned") {
+            type += " " + tokens[pos];
+            pos++;
+        }
+    }
+
+    return type;
+}
+
 std::vector<std::string> transformTokens(const std::vector<std::string>& tokens) {
     std::vector<std::string> newTokens;
-    newTokens.emplace_back("#include <iostream>\n#include <vector>\n#include <memory>\n#define print(message) std::cout<<(message)<<std::endl\n");
+    newTokens.emplace_back("#include <iostream>\n#include <vector>\n#include <memory>\n#include <string>\n#define print(message) std::cout<<(message)<<std::endl\n");
     std::string fnName("");
     bool declaring = false;
+    bool inConcept = false;
     std::unordered_set<std::string> argNames;
+    std::unordered_set<std::string> conceptNames;
 
     newTokens.emplace_back(
         "#include <stdexcept>\n"
@@ -45,9 +150,10 @@ std::vector<std::string> transformTokens(const std::vector<std::string>& tokens)
         "public:\n"
         "    SafeSharedPtr() = default;\n"
         "    explicit SafeSharedPtr(T* ptr) : ptr_(std::shared_ptr<T>(ptr)) {}\n"
-        "    SafeSharedPtr(const std::shared_ptr<T>& ptr) : ptr_(ptr) {}\n"
-        "    SafeSharedPtr(std::shared_ptr<T>&& ptr) : ptr_(std::move(ptr)) {}\n"
+        "    explicit SafeSharedPtr(const std::shared_ptr<T>& ptr) : ptr_(ptr) {}\n"
+        "    explicit SafeSharedPtr(std::shared_ptr<T>&& ptr) : ptr_(std::move(ptr)) {}\n"
         "    SafeSharedPtr(std::nullptr_t) : ptr_(nullptr) {}\n"
+        "    operator T&() const {return *ptr_;} \n"
         "    // Override dereference operator\n"
         "    T& operator*() const {\n"
         "        if (!ptr_) {\n"
@@ -115,7 +221,8 @@ std::vector<std::string> transformTokens(const std::vector<std::string>& tokens)
 
 
     for(int i=0;i<tokens.size();++i) {
-        if(tokens[i]=="fn") {
+        if(tokens[i]=="func") {
+            inConcept = false;
             if(i>=tokens.size()-4) {
                 std::cerr << "`fn` function declaration was not complete" << std::endl;
                 exit(1);
@@ -126,13 +233,15 @@ std::vector<std::string> transformTokens(const std::vector<std::string>& tokens)
             }
             newTokens.emplace_back("auto");
             fnName = tokens[i+1];
+            newTokens.emplace_back(fnName);
             declaring = true;
             argNames.clear();
+            i += 1;
             continue;
         }
         if(declaring && tokens[i]==")") 
             declaring = false; // end declaration but continue normally
-        
+
         if(tokens[i]=="auto") {
             std::cerr << "`auto` is not allowed. Use `var` to declare variables or `fn` to declare functions." << std::endl;
             exit(1);
@@ -146,7 +255,7 @@ std::vector<std::string> transformTokens(const std::vector<std::string>& tokens)
             exit(1);
         }
         if(tokens[i]=="nullptr") {
-            std::cerr << "`nullptr` is not allowed. If your are trying to do `varname=nullptr;`, you may consider `unbind varname;` instead  to let the memory handler process how the value should best be removed from this context." << std::endl;
+            std::cerr << "`nullptr` is not allowed. If you are trying to do `varname=nullptr;`, you may consider `unbind varname;` instead to let the memory handler process how the value should best be removed from this context." << std::endl;
             exit(1);
         }
         if(tokens[i]=="unbind") {
@@ -174,14 +283,6 @@ std::vector<std::string> transformTokens(const std::vector<std::string>& tokens)
             std::cerr << "`&` is not allowed. Construct `shared[type]` objects" << std::endl;
             exit(1);
         }
-        /*if(tokens[i]=="private") {
-            std::cerr << "`private` is not allowed. All struct members must be public." << std::endl;
-            exit(1);
-        }
-        if(tokens[i]=="public") {
-            std::cerr << "`public` is not allowed. All struct members are already public." << std::endl;
-            exit(1);
-        }*/
         if(tokens[i][0]=='#') {
             std::cerr << "Preprocessor commands are not allowed." << std::endl;
             exit(1);
@@ -211,13 +312,41 @@ std::vector<std::string> transformTokens(const std::vector<std::string>& tokens)
             newTokens.emplace_back("->");
             continue;
         }
+        if(tokens[i]=="type") {
+            if(i>=tokens.size()-3) {
+                std::cerr << "`type` definition is incomplete" << std::endl;
+                exit(1);
+            }
+            if(tokens[i+2]!="{") {
+                std::cerr << "Invalid `type` definition" << std::endl;
+                exit(1);
+            }
+            newTokens.emplace_back("template");
+            newTokens.emplace_back("<");
+            newTokens.emplace_back("typename T");
+            newTokens.emplace_back(">");
+            newTokens.emplace_back("concept");
+            newTokens.emplace_back(tokens[i+1]);
+            newTokens.emplace_back("=");
+            newTokens.emplace_back("requires");
+            newTokens.emplace_back("(");
+            newTokens.emplace_back("T");
+            newTokens.emplace_back("self");
+            newTokens.emplace_back(")");
+            newTokens.emplace_back("{");
+            conceptNames.insert(tokens[i+1]);
+            inConcept = false;
+            i += 2;
+            continue;
+        }
         if(tokens[i]=="struct") {
+            inConcept = false;
             if(i>=tokens.size()-3) {
                 std::cerr << "`struct` definition is incomplete" << std::endl;
                 exit(1);
             }
             if(tokens[i+2]!="{") {
-                std::cerr << "Invalid `struct `definition" << std::endl;
+                std::cerr << "Invalid `struct` definition" << std::endl;
                 exit(1);
             }
             newTokens.emplace_back("struct");
@@ -225,7 +354,56 @@ std::vector<std::string> transformTokens(const std::vector<std::string>& tokens)
             newTokens.emplace_back("{");
             newTokens.emplace_back(tokens[i+1]+"* operator->() {return this;} // optimized away by -O2 \n");
             newTokens.emplace_back("const "+tokens[i+1]+"* operator->() const {return this;} // optimized away by -O2 \n");
+            newTokens.emplace_back(tokens[i+1]+"(const "+tokens[i+1]+"& other) = default; \n");
+            newTokens.emplace_back(tokens[i+1]+"("+tokens[i+1]+"&& other) = default; \n");
             i += 2;
+            continue;
+        }
+        if(tokens[i]=="exists") {
+            int depth = 1;
+            int pos = i+2;
+            std::string type("");
+            while(pos<tokens.size()) {
+                if(tokens[pos]=="[")
+                    depth++;
+                if(tokens[pos]=="]")
+                    depth--;
+                if(depth==0)
+                    break;
+                type += tokens[pos];
+                if(tokens[pos]=="[")
+                    depth++;
+                pos++;
+            }
+            pos++;
+
+            depth = 0;
+            newTokens.emplace_back("{ ");
+            while(pos<tokens.size()) {
+                if(tokens[pos]=="{")
+                    depth++;
+                if(tokens[pos]=="}")
+                    depth--;
+                if(tokens[pos]==";" && depth==0)
+                    break;
+                if(tokens[pos]==".")
+                    newTokens.emplace_back("->");
+                else
+                    newTokens.emplace_back(tokens[pos]);
+                pos++;
+            }
+            if(pos==tokens.size()) {
+                std::cerr << "Never terminated the `exists` statement with `;`." << std::endl;
+                exit(1);
+            }
+            newTokens.emplace_back(" }");
+            newTokens.emplace_back("->");
+            newTokens.emplace_back("std::convertible_to");
+            newTokens.emplace_back("<");
+            newTokens.emplace_back(type);
+            newTokens.emplace_back(">");
+            newTokens.emplace_back(";");
+            i = pos;
             continue;
         }
         if(tokens[i]=="var") {
@@ -249,109 +427,52 @@ std::vector<std::string> transformTokens(const std::vector<std::string>& tokens)
                 exit(1);
             }
         }
-        if(tokens[i]=="shared") {
-            if(i>=tokens.size()-1 || tokens[i+1]!="[") {
-                std::cerr << "`shared` must be followed by `[`" << std::endl;
-                exit(1);
-            }
-            int pos = i+2;
-            int depth = 1;
-            if(i && (tokens[i-1]=="=" || tokens[i-1]=="return" || (tokens[i-1]=="(" && !declaring)))
-                newTokens.emplace_back("make_safe_shared");
-            else {
-                // when declaring function inputs, they should be const and & to avoid creating redundant shared ptrs
-                if(declaring)
-                    newTokens.emplace_back("const");
-                newTokens.emplace_back("SafeSharedPtr");
-            }
-            newTokens.emplace_back("<");
-            while(pos<tokens.size()) {
-                if(tokens[pos]=="[")
-                    depth++;
-                if(tokens[pos]=="]")
-                    depth--;
-                if(depth==0)
-                    break;
-                if(tokens[pos]=="void") {
-                    std::cerr << "`void` is not allowed." << std::endl;
-                    exit(1);
-                }
-                if(tokens[pos]=="auto") {
-                    std::cerr << "`auto` is not allowed. Use `var` to declare variables or `fn` to declare functions. However, here you are in a function signature, where even `var` is disallowed." << std::endl;
-                    exit(1);
-                }
-                if(tokens[pos]=="var") {
-                    std::cerr << "Explicit types are always expected as function arguments." << std::endl;
-                    exit(1);
-                }
-                newTokens.emplace_back(tokens[pos]);
-                pos++;
-            }
-            if(depth!=0){
-                std::cerr << "`[` has no matching `]`" << std::endl;
-                exit(1);
-            }
-            i = pos;
-            newTokens.emplace_back(">");
-            if(declaring) // close the const & declaration
-                newTokens.emplace_back("&");
-            if(declaring && i<tokens.size()-1)
-                argNames.insert(tokens[i+1]);
+        if(conceptNames.find(tokens[i])!=conceptNames.end() && declaring) {
+            newTokens.push_back("const");
+            newTokens.push_back(tokens[i]);
+            newTokens.push_back("auto");
+            newTokens.push_back("&");
             continue;
         }
-        if(tokens[i]=="vector") {
-            if(i>=tokens.size()-1 || tokens[i+1]!="[") {
-                std::cerr << "`vector` must be followed by `[`" << std::endl;
+        if(tokens[i]=="shared" || tokens[i]=="vector") {
+            // Start parsing the type
+            int posCopy = i;
+            bool isConstructorCall = false;
+            try {
+                std::string parsedType = parseType(tokens, posCopy, conceptNames, declaring, isConstructorCall);
+                newTokens.emplace_back(parsedType);
+                i = posCopy - 1; // Adjust for loop increment
+            }
+            catch (const std::exception& e) {
+                std::cerr << "Type parsing error at token " << i << ": " << e.what() << std::endl;
                 exit(1);
             }
-            int pos = i+2;
-            int depth = 1;
-            if(i && (tokens[i-1]=="=" || tokens[i-1]=="return" || (tokens[i-1]=="(" && !declaring)))
-                newTokens.emplace_back("SafeVector");
-            else {
-                // when declaring function inputs, they should be const and & to avoid creating redundant shared ptrs
-                if(declaring)
-                    newTokens.emplace_back("const");
-                newTokens.emplace_back("SafeVector");
-            }
-            newTokens.emplace_back("<");
-            while(pos<tokens.size()) {
-                if(tokens[pos]=="[")
-                    depth++;
-                if(tokens[pos]=="]")
-                    depth--;
-                if(depth==0)
-                    break;
-                if(tokens[pos]=="void") {
-                    std::cerr << "`void` is not allowed." << std::endl;
-                    exit(1);
-                }
-                if(tokens[pos]=="auto") {
-                    std::cerr << "`auto` is not allowed. Use `var` to declare variables or `fn` to declare functions. However, here you are in a function signature, where even `var` is disallowed." << std::endl;
-                    exit(1);
-                }
-                if(tokens[pos]=="var") {
-                    std::cerr << "Explicit types are always expected as function arguments." << std::endl;
-                    exit(1);
-                }
-                newTokens.emplace_back(tokens[pos]);
-                pos++;
-            }
-            if(depth!=0){
-                std::cerr << "`[` has no matching `]`" << std::endl;
-                exit(1);
-            }
-            i = pos;
-            newTokens.emplace_back(">");
-            if(declaring) // close the const & declaration
-                newTokens.emplace_back("&");
-            if(declaring && i<tokens.size()-1)
-                argNames.insert(tokens[i+1]);
             continue;
         }
-        if(declaring && i<tokens.size()-1 && (tokens[i+1]=="," || (tokens[i+1]==")" && tokens[i]!="(")) && newTokens[newTokens.size()-1]!="&") {
+        if(declaring 
+            && tokens[i]!="," 
+            && tokens[i]!="("  
+            && tokens[i]!=")" 
+            && primitiveTypes.find(tokens[i]) == primitiveTypes.end()
+            && i<tokens.size()-1 && tokens[i+1]!="," && tokens[i+1]!="=" && tokens[i+1]!=")"
+            && i && tokens[i-1]!="=") {
+            //newTokens.emplace_back("const");
+            newTokens.emplace_back(tokens[i]);
             newTokens.emplace_back("&");
-        } 
+            continue;
+        }
+        /*if(declaring && (tokens[i]=="," || (tokens[i]==")" && tokens[i-1]!="("))) {
+            // Continue to next token
+            newTokens.emplace_back(";");
+            newTokens.emplace_back(tokens[i]);
+            continue;
+        }*/
+
+        // Replace 'string' with 'std::string' and 'boolean' with 'bool'
+        if(tokens[i]=="string") {
+            newTokens.emplace_back("std::string");
+            continue;
+        }
 
         newTokens.emplace_back(tokens[i]);
     }
@@ -394,9 +515,8 @@ void processFile(const std::string& filename) {
         if(token.size() && (token[token.size()-1]=='{' || token[0]=='}' || token[token.size()-1]==';' || token[0]=='#')) {
             outfile << '\n';
             if(nextToken.size() && nextToken[0]=='}') {
-                prefix.pop_back();
-                prefix.pop_back();
-                prefix.pop_back();
+                if (prefix.size() >= 3)
+                    prefix.resize(prefix.size() - 3);
             }
             outfile << prefix;
         }
@@ -405,18 +525,19 @@ void processFile(const std::string& filename) {
                 outfile << prefix.substr(1);
         }
     }
-    outfile << tokens[tokens.size()-1];
+    if (!tokens.empty())
+        outfile << tokens.back();
 
     outfile.close();
-    std::cout << "File processed and saved as: " << output_filename << std::endl;
+    std::cout << "Transpiled: " << output_filename << std::endl;
 
-    
+
     std::string executable_name = filename.substr(0, filename.find_last_of('.'));
-    std::string compile_command = "g++ " + output_filename + " -o "+executable_name+" -O2 -std=c++20 && ./"+executable_name;
+    std::string compile_command = "g++ " + output_filename + " -o "+executable_name+" -O2 -std=c++20 && ./" + executable_name;
     if (std::system(compile_command.c_str()) != 0) 
         std::cerr << "Failed to compile or run the generated code." << std::endl;
-    else
-        std::cout << "Execution finished" << std::endl;
+    //else
+    //    std::cout << "Execution finished" << std::endl;
 
 }
 

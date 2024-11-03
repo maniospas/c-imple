@@ -1,15 +1,23 @@
-fn add(vector[double] x, vector[double] y) {
-    if(x.size()!=y.size())
-        throw std@runtime_error("Different vec sizes");
-    var z = vector[double]();
-    z.reserve(x.size());
-    for(int i=0;i<x.size();++i)
-        z.push(x[i]+y[i]);
-    return z;
+struct Number {
+    double value;
+    Number() {
+        self.value = 0;
+        print("Created a number");
+    }
+    Number(double value) {
+        self.value = value;
+        print("Created a number");
+    }
+};
+
+func test(Number number) {
+    number.value = 1;
 }
-fn main() {
-    var x = vector[double]({1,2,3,4});
-    var y = vector[double]({1,2,3,4});
-    var z = add(x,y);
-    print(z[2]);
+
+func main() { 
+    var x = vector[shared[Number]](4);
+    x[0] = shared[Number](3);
+    test(x[0]);
+    print(x[0].value);
+    return 0;  
 }

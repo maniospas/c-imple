@@ -1,6 +1,7 @@
 #include <iostream>
 #include <vector>
 #include <memory>
+#include <string>
 #define print(message) std::cout<<(message)<<std::endl
  
 #include <stdexcept>
@@ -10,9 +11,10 @@ class SafeSharedPtr {
 public:
     SafeSharedPtr() = default;
     explicit SafeSharedPtr(T* ptr) : ptr_(std::shared_ptr<T>(ptr)) {}
-    SafeSharedPtr(const std::shared_ptr<T>& ptr) : ptr_(ptr) {}
-    SafeSharedPtr(std::shared_ptr<T>&& ptr) : ptr_(std::move(ptr)) {}
+    explicit SafeSharedPtr(const std::shared_ptr<T>& ptr) : ptr_(ptr) {}
+    explicit SafeSharedPtr(std::shared_ptr<T>&& ptr) : ptr_(std::move(ptr)) {}
     SafeSharedPtr(std::nullptr_t) : ptr_(nullptr) {}
+    operator T&() const {return *ptr_;} 
     // Override dereference operator
     T& operator*() const {
         if (!ptr_) {
@@ -75,22 +77,29 @@ public:
     bool empty() const { return data.empty(); }
 };
 
- auto add(const SafeVector<double>&x,const SafeVector<double>&y){
-   if(x-> size()!=y-> size())throw std::runtime_error("Different vec sizes");
-   auto z=SafeVector<double>();
-   z-> reserve(x-> size());
-   for(int i=0;
-   i<x-> size();
-   ++i)z-> push(x[i]+y[i]);
-   return z;
+ struct Number{
+   Number* operator->() {return this;} // optimized away by -O2 
+   const Number* operator->() const {return this;} // optimized away by -O2 
+   Number(const Number& other) = default; 
+   Number(Number&& other) = default; 
+   double value;
+   Number(){
+      this -> value=0;
+      print("Created a number");
+   }
+   Number(double value){
+      this -> value=value;
+      print("Created a number");
+   }
+}
+;
+auto test(Number&number){
+   number -> value=1;
 }
 int main(){
-   auto x=SafeVector<double>({
-      1,2,3,4}
-      );
-      auto y=SafeVector<double>({
-         1,2,3,4}
-         );
-         auto z=add(x,y);
-         print(z[2]);
-      }
+   auto x=SafeVector<SafeSharedPtr<Number>>(4);
+   x[0]=make_safe_shared<Number>(3);
+   test(x[0]);
+   print(x[0]-> value);
+   return 0;
+}
