@@ -1,6 +1,6 @@
 # C-imple
 
-*Modern C++ is amazing, if you know what to use.*
+*A memory safe C++ transpiler.*
 
 This is a toy language that aims to transpile itself into
 safe yet performant C++ code that is then compiled with
