@@ -106,6 +106,7 @@ std::vector<std::string> transformTokens(const std::vector<std::string>& tokens)
         "        if (data.empty()) throw std::out_of_range(\"Pop from empty SafeVector\");\n"
         "        data.pop_back();\n"
         "    }\n"
+        "    void reserve(size_t size) { data.reserve(size); }\n"
         "    void push(const T& value) { data.push_back(value); }\n"
         "    void clear() { data.clear(); }\n"
         "    bool empty() const { return data.empty(); }\n"

@@ -69,32 +69,28 @@ public:
         if (data.empty()) throw std::out_of_range("Pop from empty SafeVector");
         data.pop_back();
     }
+    void reserve(size_t size) { data.reserve(size); }
     void push(const T& value) { data.push_back(value); }
     void clear() { data.clear(); }
     bool empty() const { return data.empty(); }
 };
 
- struct Point{
-   Point* operator->() {return this;} // optimized away by -O2 
-   const Point* operator->() const {return this;} // optimized away by -O2 
-   double x;
-   double y;
-   Point(double x,double y){
-      this -> x=x;
-      this -> y=y;
-   }
-}
-;
-auto add(Point&a,Point&b){
-   double x=a->x+b->x;
-   double y=a->y+b->y;
-   return Point(x,y);
+ auto add(const SafeVector<double>&x,const SafeVector<double>&y){
+   if(x-> size()!=y-> size())throw std::runtime_error("Different vec sizes");
+   auto z=SafeVector<double>();
+   z-> reserve(x-> size());
+   for(int i=0;
+   i<x-> size();
+   ++i)z-> push(x[i]+y[i]);
+   return z;
 }
 int main(){
-   auto a=Point(1,2);
-   auto b=Point(1,2);
-   auto c=add(a,b);
-   print(c->x);
-   print(c->y);
-   return 0;
-}
+   auto x=SafeVector<double>({
+      1,2,3,4}
+      );
+      auto y=SafeVector<double>({
+         1,2,3,4}
+         );
+         auto z=add(x,y);
+         print(z[2]);
+      }

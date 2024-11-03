@@ -176,18 +176,18 @@ Execution finished
 A second handler is `vector`. This can be used to store a 
 sequence of data based on the namesake standard library. 
 Vector elements can be accessed or set with brackets `[]`,
-or otherwise manipulated with`vec.push(value)` and `vec.pop()`
-methods. You can also preallocate zeroed memory by instantiating
-a vector with a given size, for example to perform arithmetics.
+or otherwise manipulated with push and pop methods.
+You can also reserve vector memory, for example to handle arithmetics.
 Here is an example of using vectors:
 
 ```cpp
 fn add(vector[double] x, vector[double] y) {
     if(x.size()!=y.size())
         throw std@runtime_error("Different vec sizes");
-    var z = vector[double](x.size());
+    var z = vector[double]();
+    z.reserve(x.size());
     for(int i=0;i<x.size();++i)
-        z[i] = x[i]+y[i];
+        z.push(x[i]+y[i]);
     return z;
 }
 fn main() {
