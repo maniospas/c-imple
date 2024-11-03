@@ -8,10 +8,10 @@ struct Number {
         self.value = value;
         print("Created a number");
     }
-    fn getValue() {
+    func getValue() {
         return self.value;
     }
-    fn inc(double value) {
+    double inc(double value) {
         self.value += value;
         return self.value;
     }
@@ -23,11 +23,11 @@ type Signed {
     exists[double] self.inc(1);
 };
 
-fn test(Signed a) {
+func test(Signed a) {
     print(a.value);
 }
 
-fn main() {
+func main() {
     var a = shared[Number](1);
     a.value = -1;
     test(a);

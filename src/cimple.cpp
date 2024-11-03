@@ -9,28 +9,69 @@
 #include <stdexcept>
 
 // g++ src/cimple.cpp -o cimple -O2 -std=c++20
-
 std::vector<std::string> tokenize(const std::string& content) {
     std::vector<std::string> tokens;
     std::string token;
-    for (char c : content) {
-        if (std::isspace(static_cast<unsigned char>(c)) || std::ispunct(static_cast<unsigned char>(c))) {
+    bool in_string = false;
+
+    for (size_t i = 0; i < content.size(); ++i) {
+        char c = content[i];
+
+        // Check for start of line comment
+        if (!in_string && c == '/' && i + 1 < content.size() && content[i + 1] == '/') {
+            // Skip until end of line
+            while (i < content.size() && content[i] != '\n') {
+                ++i;
+            }
+            continue;
+        }
+
+        // Check for start or end of a quoted string
+        if (c == '"' && (i == 0 || content[i - 1] != '\\')) {
+            if (in_string) {
+                token += c;
+                tokens.push_back(token);
+                token.clear();
+                in_string = false;
+            } else {
+                if (!token.empty()) {
+                    tokens.push_back(token);
+                    token.clear();
+                }
+                in_string = true;
+                token += c;
+            }
+            continue;
+        }
+
+        // Handle characters inside a string without further splitting
+        if (in_string) {
+            token += c;
+            continue;
+        }
+
+        // Split on whitespace or punctuation, but don't split on underscore
+        if (std::isspace(static_cast<unsigned char>(c)) || (std::ispunct(static_cast<unsigned char>(c)) && c != '_')) {
             if (!token.empty()) {
                 tokens.push_back(token);
                 token.clear();
             }
-            if (std::ispunct(static_cast<unsigned char>(c))) {
+            if (std::ispunct(static_cast<unsigned char>(c)) && c != '_') {
                 tokens.push_back(std::string(1, c));
             }
         } else {
             token += c;
         }
     }
+
+    // Add any remaining token
     if (!token.empty()) {
         tokens.push_back(token);
     }
+
     return tokens;
 }
+
 
 
 // Primitive types that should not be converted to const Type&
@@ -96,8 +137,9 @@ std::string parseType(const std::vector<std::string>& tokens, int& pos, const st
             type += "[" + nestedType + "]";
         }
         else if (current == ",") {
-            pos++; // Move past ','
-            type += ", ";
+            //pos++; // Move past ','
+            //type += ", ";
+            break;
         }
         else if (current == "]" || current == ")" || current == ";") {
             // End of type

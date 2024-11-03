@@ -1,3 +1,4 @@
+// test.cm
 struct Number {
     double value;
     Number() {

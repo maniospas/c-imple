@@ -77,37 +77,41 @@ public:
     bool empty() const { return data.empty(); }
 };
 
- struct LinkedNode{
-   LinkedNode* operator->() {return this;} // optimized away by -O2 
-   const LinkedNode* operator->() const {return this;} // optimized away by -O2 
-   LinkedNode(const LinkedNode& other) = default; 
-   LinkedNode(LinkedNode&& other) = default; 
+ struct Number{
+   Number* operator->() {return this;} // optimized away by -O2 
+   const Number* operator->() const {return this;} // optimized away by -O2 
+   Number(const Number& other) = default; 
+   Number(Number&& other) = default; 
    double value;
-   SafeSharedPtr<LinkedNode>next;
-   SafeSharedPtr<LinkedNode>prev;
-   LinkedNode(double value){
+   Number(){
+      this -> value=0;
+      print("Created a number");
+   }
+   Number(double value){
       this -> value=value;
+      print("Created a number");
+   }
+   auto getValue(){
+      return this -> value;
+   }
+   double inc(double value){
+      this -> value+=value;
+      return this -> value;
    }
 }
 ;
-auto set_next(const SafeSharedPtr<LinkedNode>&from,const SafeSharedPtr<LinkedNode>&to){
-   from -> next=to;
-   to -> prev=from;
+template<typename T>concept Signed=requires(T self){
+   {  self -> value  } -> std::convertible_to<double>;
+   {  self -> getValue() } -> std::convertible_to<double>;
+   {  self -> inc(1) } -> std::convertible_to<double>;
+}
+;
+auto test(const Signed auto&a){
+   print(a-> value);
 }
 int main(){
-   auto node1=make_safe_shared<LinkedNode>(1);
-   auto node2=make_safe_shared<LinkedNode>(2);
-   auto node3=make_safe_shared<LinkedNode>(3);
-   set_next(node1,node2);
-   set_next(node2,node3);
-   try{
-      print(node1 -> value);
-      print(node1 -> next -> value);
-      print(node1 -> next -> next -> value);
-      print(node1 -> next -> next -> next -> value);
-   }
-   catch(std::runtime_error){
-      print("runtime error");
-   }
+   auto a=make_safe_shared<Number>(1);
+   a-> value=-1;
+   test(a);
    return 0;
 }
