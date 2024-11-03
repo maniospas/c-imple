@@ -11,7 +11,7 @@ finished.
 ## Quickstart
 
 ```bash
-g++ src/cimply.cpp -o cimply -O2 -std=c++20
+g++ src/cimple.cpp -o cimple -O2 -std=c++20
 ```
 
 
@@ -39,7 +39,7 @@ fn main() {
 ```
 
 ```bash
-./cimply main.cm
+./cimple main.cm
 3
 ```
 
@@ -59,7 +59,7 @@ fn main() {
 ```
 
 ```bash
-./cimply main.cm
+./cimple main.cm
 Hello world!
 ```
 
@@ -170,7 +170,7 @@ fn main() {
 ```
 
 ```bash
-./cimply main.cm
+./cimple main.cm
 File processed and saved as: main.cpp
 1
 2

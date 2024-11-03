@@ -8,7 +8,7 @@
 #include <cctype>
 #include <stdexcept>
 
-// g++ src/cimply.cpp -o cimply -O2 -std=c++20
+// g++ src/cimple.cpp -o cimple -O2 -std=c++20
 
 std::vector<std::string> tokenize(const std::string& content) {
     std::vector<std::string> tokens;

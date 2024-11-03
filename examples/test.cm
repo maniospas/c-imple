@@ -15,8 +15,8 @@ func test(Number number) {
 }
 
 func main() { 
-    var x = vector[shared[Number]](4);
-    x[0] = shared[Number](3);
+    var x = vector[shared[Number]] (4);
+    x[0] = shared[Number] (3);
     test(x[0]);
     print(x[0].value);
     return 0;  
