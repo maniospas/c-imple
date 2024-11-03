@@ -1,14 +1,21 @@
-fn add(vector[double] x, vector[double] y) {
-    if(x.size()!=y.size())
-        throw std@runtime_error("Different vec sizes");
-    var z = vector[double](x.size());
-    for(int i=0;i<x.size();++i)
-        z[i] = x[i]+y[i];
-    return z;
+struct Point {
+    double x;
+    double y;
+    Point(double x, double y) {
+        self.x = x;
+        self.y = y;
+    }
+};
+fn add(Point a, Point b) {
+    double x = a.x+b.x;
+    double y = a.y+b.y;
+    return Point(x,y);
 }
 fn main() {
-    var x = vector[double]({1,2,3,4});
-    var y = vector[double]({1,2,3,4});
-    var z = add(x,y);
-    print(z[2]);
+    var a = Point(1, 2);
+    var b = Point(1, 2);
+    var c = add(a, b);
+    print(c.x);
+    print(c.y);
+    return 0;
 }

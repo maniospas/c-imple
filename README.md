@@ -72,7 +72,7 @@ struct Point {
         self.x = x;
         self.y = y;
     }
-}
+};
 ```
 
 When declaring methods that take structs as inputs,
@@ -84,7 +84,7 @@ example.
 
 ```c++
 // main.cm (second part)
-fn adder(Point a, Point b) {
+fn add(Point a, Point b) {
     double x = a.x+b.x;
     double y = a.y+b.y;
     return Point(x,y);
