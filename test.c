@@ -1,33 +1,14 @@
-struct LinkedNode {
-    double value;
-    shared[LinkedNode] next;
-    shared[LinkedNode] prev;
-    LinkedNode(var value) {
-        self.value = value;
-    }
-};
-
-fn set_next(shared[LinkedNode] from, shared[LinkedNode] to) {
-    from.next = to;
-    to.prev = from;
+fn add(vector[double] x, vector[double] y) {
+    if(x.size()!=y.size())
+        throw std@runtime_error("Different vec sizes");
+    var z = vector[double](x.size());
+    for(int i=0;i<x.size();++i)
+        z[i] = x[i]+y[i];
+    return z;
 }
-
 fn main() {
-    var node1 = shared[LinkedNode](1);
-    var node2 = shared[LinkedNode](2);
-    var node3 = shared[LinkedNode](3);
-
-    set_next(node1, node2);
-    set_next(node2, node3);
-    try {
-        print(node1.value);
-        print(node1.next.value);
-        print(node1.next.next.value);
-        print(node1.next.next.next.value);
-    }
-    catch(std@runtime_error) {
-        print("runtime error");
-    }
-
-    return 0;
+    var x = vector[double]({1,2,3,4});
+    var y = vector[double]({1,2,3,4});
+    var z = add(x,y);
+    print(z[2]);
 }

@@ -11,7 +11,7 @@ finished.
 
 ## Syntax
 
-You can declare functions on the globaal scope
+You can declare functions on the global scope
 with the `fn` keyword. The return type of these
 is automatically inferred based on the returned
 value type. Function declarations require some
@@ -109,13 +109,13 @@ same constructor arguments. This is often similar to
 pointers with various methods of handling them safety 
 attached.
 
-Currently, there is only the `shared` handler implemented.
+Let us start with the `shared` handler.
 THis makes use of shared pointer semantics under the hood.
 That is, it allows the safe creation of pointers
 and their automatic deletion once they are no longer bound
 to anything. In this strategy, there may be circular references
-(which would be memory leaks) and therefore usage of the 
-`unbind varname;`syntax is necessary to break those loops.
+(which would be memory leaks) and therefore its data
+structures can use the `unbind varname;`syntax to remove references.
 This remains memory safe, with a clear exception being
 caught if an unbound variable is being accessed. However,
 deletion timing may occur at any point in the code.
@@ -171,4 +171,29 @@ File processed and saved as: main.cpp
 3
 runtime error
 Execution finished
+```
+
+A second handler is `vector`. This can be used to store a 
+sequence of data based on the namesake standard library. 
+Vector elements can be accessed or set with brackets `[]`,
+or otherwise manipulated with`vec.push(value)` and `vec.pop()`
+methods. You can also preallocate zeroed memory by instantiating
+a vector with a given size, for example to perform arithmetics.
+Here is an example of using vectors:
+
+```cpp
+fn add(vector[double] x, vector[double] y) {
+    if(x.size()!=y.size())
+        throw std@runtime_error("Different vec sizes");
+    var z = vector[double](x.size());
+    for(int i=0;i<x.size();++i)
+        z[i] = x[i]+y[i];
+    return z;
+}
+fn main() {
+    var x = vector[double]({1,2,3,4});
+    var y = vector[double]({1,2,3,4});
+    var z = add(x,y);
+    print(z[2]);
+}
 ```

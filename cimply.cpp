@@ -32,7 +32,7 @@ std::vector<std::string> tokenize(const std::string& content) {
 
 std::vector<std::string> transformTokens(const std::vector<std::string>& tokens) {
     std::vector<std::string> newTokens;
-    newTokens.emplace_back("#include <iostream>\n#include <memory>\n#define print(message) std::cout<<(message)<<std::endl\n");
+    newTokens.emplace_back("#include <iostream>\n#include <vector>\n#include <memory>\n#define print(message) std::cout<<(message)<<std::endl\n");
     std::string fnName("");
     bool declaring = false;
     std::unordered_set<std::string> argNames;
@@ -68,7 +68,7 @@ std::vector<std::string> transformTokens(const std::vector<std::string>& tokens)
         "    std::shared_ptr<T> get() const {return ptr_;}\n"
         "private:\n"
         "    std::shared_ptr<T> ptr_;\n"
-        "};\n"
+        "};\n\n"
         "template <typename T, typename... Args>\n"
         "SafeSharedPtr<T> make_safe_shared(Args&&... args) {\n"
         "    return SafeSharedPtr<T>(std::make_shared<T>(std::forward<Args>(args)...));\n"
@@ -76,6 +76,41 @@ std::vector<std::string> transformTokens(const std::vector<std::string>& tokens)
         "\n"
     );
 
+
+    newTokens.emplace_back(
+        "template <typename T>\n"
+        "class SafeVector {\n"
+        "private:\n"
+        "    std::vector<T> data;\n"
+        "\n"
+        "public:\n"
+        "    SafeVector() = default;\n"
+        "    SafeVector(int size) : data(size) {}\n"
+        "    SafeVector(std::initializer_list<T> init) : data(init) {}\n"
+        "    size_t size() const { return data.size(); }\n"
+        "    SafeVector* operator->() {return this;} // optimized away by -O2 \n"
+        "    const SafeVector* operator->() const {return this;} // optimized away by -O2 \n"
+        "    T& operator[](size_t index) {\n"
+        "        if (index >= data.size()) throw std::out_of_range(\"Index \"+std::to_string(index)+\" casted from negative int or out of bounds in `vector` with \"+std::to_string(data.size())+\" elements\");\n"
+        "        return data[index];\n"
+        "    }\n"
+        "    const T& operator[](size_t index) const {\n"
+        "        if (index >= data.size()) throw std::out_of_range(\"Index \"+std::to_string(index)+\" casted from negative int or out of bounds in `vector` with \"+std::to_string(data.size())+\" elements\");\n"
+        "        return data[index];\n"
+        "    }\n"
+        "    void set(size_t index, const T& value) {\n"
+        "        if (index >= data.size()) throw std::out_of_range(\"Index \"+std::to_string(index)+\" casted from negative int or out of bounds in `vector` with \"+std::to_string(data.size())+\" elements\");\n"
+        "        data[index] = value;\n"
+        "    }\n"
+        "    void pop() {\n"
+        "        if (data.empty()) throw std::out_of_range(\"Pop from empty SafeVector\");\n"
+        "        data.pop_back();\n"
+        "    }\n"
+        "    void push(const T& value) { data.push_back(value); }\n"
+        "    void clear() { data.clear(); }\n"
+        "    bool empty() const { return data.empty(); }\n"
+        "};\n\n"
+    );
 
 
     for(int i=0;i<tokens.size();++i) {
@@ -263,6 +298,56 @@ std::vector<std::string> transformTokens(const std::vector<std::string>& tokens)
                 argNames.insert(tokens[i+1]);
             continue;
         }
+        if(tokens[i]=="vector") {
+            if(i>=tokens.size()-1 || tokens[i+1]!="[") {
+                std::cerr << "`vector` must be followed by `[`" << std::endl;
+                exit(1);
+            }
+            int pos = i+2;
+            int depth = 1;
+            if(i && (tokens[i-1]=="=" || tokens[i-1]=="return" || (tokens[i-1]=="(" && !declaring)))
+                newTokens.emplace_back("SafeVector");
+            else {
+                // when declaring function inputs, they should be const and & to avoid creating redundant shared ptrs
+                if(declaring)
+                    newTokens.emplace_back("const");
+                newTokens.emplace_back("SafeVector");
+            }
+            newTokens.emplace_back("<");
+            while(pos<tokens.size()) {
+                if(tokens[pos]=="[")
+                    depth++;
+                if(tokens[pos]=="]")
+                    depth--;
+                if(depth==0)
+                    break;
+                if(tokens[pos]=="void") {
+                    std::cerr << "`void` is not allowed." << std::endl;
+                    exit(1);
+                }
+                if(tokens[pos]=="auto") {
+                    std::cerr << "`auto` is not allowed. Use `var` to declare variables or `fn` to declare functions. However, here you are in a function signature, where even `var` is disallowed." << std::endl;
+                    exit(1);
+                }
+                if(tokens[pos]=="var") {
+                    std::cerr << "Explicit types are always expected as function arguments." << std::endl;
+                    exit(1);
+                }
+                newTokens.emplace_back(tokens[pos]);
+                pos++;
+            }
+            if(depth!=0){
+                std::cerr << "`[` has no matching `]`" << std::endl;
+                exit(1);
+            }
+            i = pos;
+            newTokens.emplace_back(">");
+            if(declaring) // close the const & declaration
+                newTokens.emplace_back("&");
+            if(declaring && i<tokens.size()-1)
+                argNames.insert(tokens[i+1]);
+            continue;
+        }
         if(declaring && i<tokens.size()-1 && (tokens[i+1]=="," || (tokens[i+1]==")" && tokens[i]!="(")) && newTokens[newTokens.size()-1]!="&") {
             newTokens.emplace_back("&");
         } 
@@ -293,7 +378,6 @@ void processFile(const std::string& filename) {
         std::cerr << "Could not open file for writing: " << output_filename << std::endl;
         return;
     }
-
     std::string prefix("");
     for (int i=0;i<tokens.size()-1;++i) {
         std::string& token = tokens[i];
@@ -301,6 +385,7 @@ void processFile(const std::string& filename) {
         outfile << token;
         if(token.size()>1 && nextToken.size()>1)
             outfile << ' ';
+        else if(token.size()==0 || nextToken.size()==0) {}
         else if(std::isalnum(static_cast<unsigned char>(token[0])) && std::isalnum(static_cast<unsigned char>(nextToken[0])))
             outfile << ' ';
         if(token.size() && token[token.size()-1]=='{')
@@ -315,7 +400,8 @@ void processFile(const std::string& filename) {
             outfile << prefix;
         }
         else if(token.size() && token[token.size()-1]=='\n') {
-            outfile << prefix.substr(1);
+            if(prefix.size())
+                outfile << prefix.substr(1);
         }
     }
     outfile << tokens[tokens.size()-1];
