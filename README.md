@@ -20,7 +20,7 @@ g++ src/cimple.cpp -o cimple -O2 -std=c++20
 ## Syntax
 
 You can declare functions on the global scope
-with the `fn` keyword. The return type of these
+with the `func` keyword. The return type of these
 is automatically inferred based on the returned
 value type. Function declarations require some
 comma-separated arguments and an explicit prefix
@@ -45,12 +45,8 @@ func main() {
 3
 ```
 
-C-imple also follows the C syntax for declaring and scoping
-variables. However, it uses the `var` instead of the `auto`
-keyword because there are some slight differences in behavior
-for safe pointers and we are trying to avoid confusion.
-By the way, do prefer usage of this keyword instead of 
-explicitly stating type. Here is an example:
+C-imple also scopes variables within bracket blocks.
+Use `var` to denote a new variable. Here is an example:
 
 ```rust
 // main.cm
