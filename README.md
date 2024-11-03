@@ -30,7 +30,7 @@ for different types).
 Each program's entry point is the `main` method. 
 Here is an example:
 
-```c++
+```rust
 // main.cm
 fn add(double x, double y) {
     return x+y;
@@ -52,7 +52,7 @@ for safe pointers and we are trying to avoid confusion.
 By the way, do prefer usage of this keyword instead of 
 explicitly stating type. Here is an example:
 
-```c++
+```rust
 // main.cm
 fn main() {
     var str = "Hello world!";
@@ -71,7 +71,7 @@ use `self.` to access struct members. Also notice
 the fullstop instead of `->`; the latter is not allowed.
 Here is an example of declaring a 2D point:
 
-```c++
+```rust
 // main.cm (first part)
 struct Point {
     double x;
@@ -90,7 +90,7 @@ public fields if needed. Futhermore, there is no
 copying involved. Here is a follow-up to the above
 example.
 
-```c++
+```rust
 // main.cm (second part)
 fn add(Point a, Point b) {
     double x = a.x+b.x;
@@ -134,7 +134,7 @@ The following snippet demonstrates usage of the
 are explicitly declared.
 
 
-```cpp
+```rust
 // main.cm
 struct LinkedNode {
     double value;
@@ -188,7 +188,7 @@ or otherwise manipulated with push and pop methods.
 You can also reserve vector memory, for example to handle arithmetics.
 Here is an example of using vectors:
 
-```cpp
+```rust
 fn add(vector[double] x, vector[double] y) {
     if(x.size()!=y.size())
         throw std@runtime_error("Different vec sizes");
