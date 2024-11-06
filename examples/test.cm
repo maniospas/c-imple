@@ -1,24 +1,21 @@
 // test.cm
 struct Number {
     double value;
-    Number() {
-        self.value = 0;
-        print("Created a number");
-    }
-    Number(double value) {
-        self.value = value;
-        print("Created a number");
-    }
+    Number() {self.value = 0;}
+    Number(double value) {self.value = value;}
 };
 
-func test(Number number) {
+type Numeric {
+    exists[double] self.value;
+};
+
+func alter(Numeric number) {
     number.value = 1;
 }
 
 func main() { 
-    var x = vector[shared[Number]] (4);
-    x[0] = shared[Number] (3);
-    test(x[0]);
-    print(x[0].value);
+    var x = shared[Number](3);
+    alter(x);
+    print(x.value);
     return 0;  
 }

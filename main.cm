@@ -1,0 +1,19 @@
+struct Data {
+    vector[double] predictions;
+    vector[double] labels;
+    Data(){}
+};
+
+
+func main() {
+    var data = Data();
+    data.labels.push(0);
+    data.labels.push(1);
+    data.predictions.push(0);
+    var acc = 0;
+    for(var i=0;i<data.labels.size();i++) 
+        if(data.labels[i]==data.predictions[i])
+            acc++;
+    print(acc);
+    return 0;
+}

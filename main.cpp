@@ -84,23 +84,20 @@ public:
    Number(Number&& other) = default; 
    double value;
    Number(){
-      this -> value=0;
+      value=0;
    }
    Number(double value){
       this -> value=value;
    }
 }
 ;
-template<typename T>concept Numeric=requires(T self){
-   {  self -> value  } -> std::convertible_to<double>;
-}
-;
-auto alter(const Numeric auto&number){
-   number -> value=1;
+auto foo(Number&x){
+   x-> value=1;
 }
 int main(){
    auto x=make_safe_shared<Number>(3);
-   alter(x);
+   for(int i=0;
+   i<10;
+   i++)print(i);
    print(x-> value);
-   return 0;
 }
