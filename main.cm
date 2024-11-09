@@ -1,19 +1,19 @@
-struct Data {
-    vector[double] predictions;
-    vector[double] labels;
-    Data(){}
-};
-
+var time = cimple.import("std/time");
+var lib = cimple.import("data");
 
 func main() {
-    var data = Data();
+    var tic = time.now();
+    var data = lib.Data();
     data.labels.push(0);
     data.labels.push(1);
     data.predictions.push(0);
-    var acc = 0;
-    for(var i=0;i<data.labels.size();i++) 
-        if(data.labels[i]==data.predictions[i])
-            acc++;
+    data.predictions.push(1);
+    
+    var acc = 0.0;
+    for(var [i,j] in zip(data.labels, data.labels)) {
+        acc += i+j+0.5;
+    }
     print(acc);
+    print(time.now()-tic);
     return 0;
 }

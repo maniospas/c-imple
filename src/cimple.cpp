@@ -8,6 +8,15 @@
 #include <cctype>
 #include <stdexcept>
 
+
+bool isNumber(const std::string& str) {
+    std::istringstream ss(str);
+    double d;
+    char c;
+    // Try to parse as a double and check for leftover characters
+    return ss >> d && !(ss >> c);
+}
+
 // g++ src/cimple.cpp -o cimple -O2 -std=c++20
 std::vector<std::string> tokenize(const std::string& content) {
     std::vector<std::string> tokens;
@@ -150,8 +159,8 @@ std::string parseType(const std::vector<std::string>& tokens, int& pos, const st
         }
         else {
             // Base type
-            if (current == "string") 
-                current = "std::string";
+            // if (current == "string") 
+            //     current = "std::string";
         
             // If declaring and the type is a function argument, append '&' unless it's a primitive type
             if (declaring && !isConstructorCall) {
@@ -175,17 +184,24 @@ std::string parseType(const std::vector<std::string>& tokens, int& pos, const st
     return type;
 }
 
-std::vector<std::string> transformTokens(const std::vector<std::string>& tokens) {
+std::vector<std::string> transformTokens(const std::vector<std::string>& tokens, bool injectExtras, std::vector<std::string>& preample, const std::string &transpilation_depth) {
     std::vector<std::string> newTokens;
-    newTokens.emplace_back("#include <iostream>\n#include <vector>\n#include <memory>\n#include <string>\n#define print(message) std::cout<<(message)<<std::endl\n");
+    if(injectExtras)
+        newTokens.emplace_back("#include <ranges>\n#include <iostream>\n#include <vector>\n#include <memory>\n#include <string>\n#define print(message) std::cout<<(message)<<std::endl\n");
     std::string fnName("");
     bool declaring = false;
     bool inConcept = false;
     std::unordered_set<std::string> argNames;
     std::unordered_set<std::string> conceptNames;
-
+    std::unordered_set<std::string> namespaces;
+    namespaces.insert("std");
+    namespaces.insert("cimple");
+    if(injectExtras)
+        newTokens.emplace_back("\n#define string(message) std::to_string(message)\n");
+    
+    if(injectExtras)
     newTokens.emplace_back(
-        "#include <stdexcept>\n"
+        "\n#include <stdexcept>\n"
         "\n"
         "template <typename T>\n"
         "class SafeSharedPtr {\n"
@@ -195,7 +211,6 @@ std::vector<std::string> transformTokens(const std::vector<std::string>& tokens)
         "    explicit SafeSharedPtr(const std::shared_ptr<T>& ptr) : ptr_(ptr) {}\n"
         "    explicit SafeSharedPtr(std::shared_ptr<T>&& ptr) : ptr_(std::move(ptr)) {}\n"
         "    SafeSharedPtr(std::nullptr_t) : ptr_(nullptr) {}\n"
-        "    operator T&() const {return *ptr_;} \n"
         "    // Override dereference operator\n"
         "    T& operator*() const {\n"
         "        if (!ptr_) {\n"
@@ -224,7 +239,7 @@ std::vector<std::string> transformTokens(const std::vector<std::string>& tokens)
         "\n"
     );
 
-
+    if(injectExtras)
     newTokens.emplace_back(
         "template <typename T>\n"
         "class SafeVector {\n"
@@ -235,6 +250,9 @@ std::vector<std::string> transformTokens(const std::vector<std::string>& tokens)
         "    SafeVector() = default;\n"
         "    SafeVector(int size) : data(size) {}\n"
         "    SafeVector(std::initializer_list<T> init) : data(init) {}\n"
+        "    operator auto() const {return data.begin();} \n"
+        "    auto begin() const { return data.begin(); }\n"
+        "     auto end() const { return data.end(); }\n"
         "    size_t size() const { return data.size(); }\n"
         "    SafeVector* operator->() {return this;} // optimized away by -O2 \n"
         "    const SafeVector* operator->() const {return this;} // optimized away by -O2 \n"
@@ -260,7 +278,6 @@ std::vector<std::string> transformTokens(const std::vector<std::string>& tokens)
         "    bool empty() const { return data.empty(); }\n"
         "};\n\n"
     );
-
 
     for(int i=0;i<tokens.size();++i) {
         if(tokens[i]=="func") {
@@ -326,7 +343,7 @@ std::vector<std::string> transformTokens(const std::vector<std::string>& tokens)
             exit(1);
         }
         if(tokens[i][0]=='#') {
-            std::cerr << "Preprocessor commands are not allowed." << std::endl;
+            std::cerr << "Preprocessor directives are not allowed." << std::endl;
             exit(1);
         }
         if(tokens[i]=="class") {
@@ -342,15 +359,27 @@ std::vector<std::string> transformTokens(const std::vector<std::string>& tokens)
             exit(1);
         }
         if(tokens[i]==":") {
-            std::cerr << "`:` is not a valid syntax." << std::endl;
+            std::cerr << "`:` is not a valid syntax. Use `in` instead if you are in a for loop." << std::endl;
             exit(1);
         }
-        if(tokens[i]=="@") {
+        if(tokens[i]=="in") {
+            newTokens.emplace_back(":");
+            continue;
+        }
+        if(tokens[i]=="zip") {
+            newTokens.emplace_back("std::views::zip");
+            continue;
+        }
+        if(namespaces.find(tokens[i])!=namespaces.end() && tokens[i]!="cimple") {
+            newTokens.emplace_back("cimple_"+tokens[i]);
+            continue;
+        }
+        if(tokens[i]=="." && i && namespaces.find(tokens[i-1])!=namespaces.end() ) {
             newTokens.emplace_back(":");
             newTokens.emplace_back(":");
             continue;
         }
-        if(tokens[i]==".") {
+        if(tokens[i]=="." && (i==0 || i>=tokens.size()-2 || !isNumber(tokens[i-1]) || !isNumber(tokens[i+1]))) {
             newTokens.emplace_back("->");
             continue;
         }
@@ -448,10 +477,66 @@ std::vector<std::string> transformTokens(const std::vector<std::string>& tokens)
             i = pos;
             continue;
         }
+        if(i<tokens.size()-9 && tokens[i]=="cimple" && tokens[i+1]=="." && tokens[i+2]=="unsafe" && tokens[i+3]=="." && tokens[i+4]=="include" && tokens[i+5]=="(") {
+            if(tokens[i+6][0]=='"')
+                preample.emplace_back("#include "+tokens[i+6]+"\n");
+            else
+                preample.emplace_back("#include <"+tokens[i+6]+">\n");
+            if(tokens[i+7]!=")" || tokens[i+8]!=";")
+                throw std::runtime_error("Invalid unsafe include syntax.");
+            i += 8;
+            continue;
+        }
         if(tokens[i]=="var") {
             if(declaring) {
                 std::cerr << "Explicit types are always expected as function arguments." << std::endl;
                 exit(1);
+            }
+            if(i<tokens.size()-8 && tokens[i+2]=="=" && tokens[i+3]=="cimple" && tokens[i+4]==".") {
+                if(tokens[i+5]=="import" &&  tokens[i+6]=="(")  {
+                    newTokens.emplace_back("\nnamespace");
+                    newTokens.emplace_back("cimple_"+tokens[i+1]);
+                    newTokens.emplace_back("{");
+                    std::cout << transpilation_depth <<  "→ " << tokens[i+7].substr(1, tokens[i+7].find_last_of('\"')-1) << ".cm" << std::endl;
+                    //newTokens.emplace_back("#include "+tokens[i+7].substr(0, tokens[i+7].find_last_of('\"')) + ".cpp\"\n");
+                    std::ifstream infile(tokens[i+7].substr(1, tokens[i+7].find_last_of('\"')-1)+".cm");
+                    if (!infile.is_open()) {
+                        throw std::runtime_error("Could not open file: " + tokens[i+7].substr(1, tokens[i+7].find_last_of('\"')-1)+".cm");
+                    }
+                    std::stringstream buffer;
+                    buffer << infile.rdbuf();
+                    infile.close();
+                    std::vector<std::string> fileTokens = tokenize(buffer.str());
+                    fileTokens = transformTokens(fileTokens, false, preample, transpilation_depth+"  ");
+                    newTokens.insert(newTokens.end(), fileTokens.begin(), fileTokens.end());
+                    namespaces.insert(tokens[i+1]);
+                    i = i+9;
+                    newTokens.emplace_back("}");
+                    newTokens.emplace_back("\n");
+                }
+                else if(i<tokens.size()-9 && tokens[i+5]=="unsafe" && tokens[i+6]=="." && tokens[i+7]=="inline" && tokens[i+8]=="(") {
+                    newTokens.emplace_back("auto");
+                    newTokens.emplace_back(tokens[i+1]);
+                    newTokens.emplace_back("=");
+                    int depth = 1;
+                    int pos = i+9;
+                    while(pos<tokens.size()) {
+                        if(tokens[pos]=="(")
+                            depth++;
+                        if(tokens[pos]==")")
+                            depth--;
+                        if(depth==0)
+                            break;
+                        if(tokens[pos]=="#")
+                            throw std::runtime_error("For added safety, you cannot also not use preprocessor directives when inlining.");
+                        newTokens.emplace_back(tokens[pos]);
+                        pos++;
+                    }
+                    i = pos;
+                }
+                else
+                    throw std::runtime_error("Invalid instruction for cimple.");
+                continue;
             }
             newTokens.emplace_back("auto");
             if(i<tokens.size()-1)
@@ -511,10 +596,10 @@ std::vector<std::string> transformTokens(const std::vector<std::string>& tokens)
         }*/
 
         // Replace 'string' with 'std::string' and 'boolean' with 'bool'
-        if(tokens[i]=="string") {
-            newTokens.emplace_back("std::string");
-            continue;
-        }
+        //if(tokens[i]=="string") {
+        //    newTokens.emplace_back("std::string");
+        //    continue;
+        //}
 
         newTokens.emplace_back(tokens[i]);
     }
@@ -534,7 +619,10 @@ void processFile(const std::string& filename) {
     infile.close();
 
     std::vector<std::string> tokens = tokenize(buffer.str());
-    tokens = transformTokens(tokens);
+    std::cout << "  Building: " << filename << std::endl;
+    std::vector<std::string> preample;
+    tokens = transformTokens(tokens, true, preample, "    ");
+    tokens.insert(tokens.begin(), preample.begin(), preample.end());
 
     std::string output_filename = filename.substr(0, filename.find_last_of('.')) + ".cpp";
     std::ofstream outfile(output_filename);
@@ -571,13 +659,18 @@ void processFile(const std::string& filename) {
         outfile << tokens.back();
 
     outfile.close();
-    std::cout << "Transpiled: " << output_filename << std::endl;
+    std::cout << "  Compiling: " << output_filename << std::endl;
 
 
     std::string executable_name = filename.substr(0, filename.find_last_of('.'));
-    std::string compile_command = "g++ " + output_filename + " -o "+executable_name+" -O2 -std=c++20 && ./" + executable_name;
+    std::string compile_command = "g++ " + output_filename + " -o "+executable_name+" -O2 -std=c++23";
     if (std::system(compile_command.c_str()) != 0) 
-        std::cerr << "Failed to compile or run the generated code." << std::endl;
+        std::cerr << "Failed to compile the generated code." << std::endl;
+    std::string run_command = "./" + executable_name;
+    std::cout << "  Running: " << run_command << std::endl;
+    std::cout << "------------------------" << std::endl;
+    if (std::system(run_command.c_str()) != 0) 
+        std::cerr << "Failed to run the generated code." << std::endl;
     //else
     //    std::cout << "Execution finished" << std::endl;
 
@@ -588,6 +681,7 @@ int main(int argc, char* argv[]) {
         std::cerr << "Usage: " << argv[0] << " <source.cm>" << std::endl;
         return 1;
     }
+    std::cout << "----- Cimple v0.1 ------" << std::endl;
     processFile(argv[1]);
     return 0;
 }

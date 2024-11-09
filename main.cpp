@@ -1,8 +1,14 @@
+#include <chrono>
+ 
+#include <ranges>
 #include <iostream>
 #include <vector>
 #include <memory>
 #include <string>
 #define print(message) std::cout<<(message)<<std::endl
+ 
+
+#define string(message) std::to_string(message)
  
 #include <stdexcept>
 
@@ -14,7 +20,6 @@ public:
     explicit SafeSharedPtr(const std::shared_ptr<T>& ptr) : ptr_(ptr) {}
     explicit SafeSharedPtr(std::shared_ptr<T>&& ptr) : ptr_(std::move(ptr)) {}
     SafeSharedPtr(std::nullptr_t) : ptr_(nullptr) {}
-    operator T&() const {return *ptr_;} 
     // Override dereference operator
     T& operator*() const {
         if (!ptr_) {
@@ -42,8 +47,7 @@ SafeSharedPtr<T> make_safe_shared(Args&&... args) {
     return SafeSharedPtr<T>(std::make_shared<T>(std::forward<Args>(args)...));
 }
 
- 
-template <typename T>
+ template <typename T>
 class SafeVector {
 private:
     std::vector<T> data;
@@ -52,6 +56,9 @@ public:
     SafeVector() = default;
     SafeVector(int size) : data(size) {}
     SafeVector(std::initializer_list<T> init) : data(init) {}
+    operator auto() const {return data.begin();} 
+    auto begin() const { return data.begin(); }
+     auto end() const { return data.end(); }
     size_t size() const { return data.size(); }
     SafeVector* operator->() {return this;} // optimized away by -O2 
     const SafeVector* operator->() const {return this;} // optimized away by -O2 
@@ -77,27 +84,38 @@ public:
     bool empty() const { return data.empty(); }
 };
 
- struct Number{
-   Number* operator->() {return this;} // optimized away by -O2 
-   const Number* operator->() const {return this;} // optimized away by -O2 
-   Number(const Number& other) = default; 
-   Number(Number&& other) = default; 
-   double value;
-   Number(){
-      value=0;
-   }
-   Number(double value){
-      this -> value=value;
-   }
+ 
+namespace cimple_time{
+   auto now=std::chrono::high_resolution_clock::now;
 }
-;
-auto foo(Number&x){
-   x-> value=1;
+
+
+namespace cimple_lib{
+   struct Data{
+      Data* operator->() {return this;} // optimized away by -O2 
+      const Data* operator->() const {return this;} // optimized away by -O2 
+      Data(const Data& other) = default; 
+      Data(Data&& other) = default; 
+      SafeVector<double>predictions;
+      SafeVector<double>labels;
+      Data(){
+      }
+   }
+   ;
 }
+
 int main(){
-   auto x=make_safe_shared<Number>(3);
-   for(int i=0;
-   i<10;
-   i++)print(i);
-   print(x-> value);
+   auto tic=cimple_time::now();
+   auto data=cimple_lib::Data();
+   data -> labels -> push(0);
+   data -> labels -> push(1);
+   data -> predictions -> push(0);
+   data -> predictions -> push(1);
+   auto acc=0.0;
+   for(auto[i,j]:std::views::zip(data -> labels,data -> labels)){
+      acc+=i+j+0.5;
+   }
+   print(acc);
+   print(cimple_time::now()-tic);
+   return 0;
 }

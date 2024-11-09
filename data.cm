@@ -1,0 +1,5 @@
+struct Data {
+    vector[double] predictions;
+    vector[double] labels;
+    Data(){}
+};

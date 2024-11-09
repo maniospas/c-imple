@@ -1,0 +1,2 @@
+cimple.unsafe.include(chrono);
+var now = cimple.unsafe.inline(std::chrono::high_resolution_clock::now);

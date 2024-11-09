@@ -2,11 +2,13 @@
 
 *A memory safe C++ transpiler.*
 
-This is a toy language that aims to transpile itself into
+This is a simple language (pun intended) 
+that aims to transpile itself into
 safe yet performant C++ code that is then compiled with
 a system compiler, like GCC. Currently, the transpilation
-is a simple code transformation that has not been fully
-finished.
+is a code transformation.
+
+**Main features are still under development.**
 
 ## Quickstart
 
