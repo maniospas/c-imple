@@ -184,7 +184,7 @@ std::string parseType(const std::vector<std::string>& tokens, int& pos, const st
     return type;
 }
 
-std::vector<std::string> transformTokens(const std::vector<std::string>& tokens, bool injectExtras, std::vector<std::string>& preample, const std::string &transpilation_depth) {
+std::vector<std::string> transformTokens(const std::vector<std::string>& tokens, bool injectExtras, std::vector<std::string>& preample, const std::string &transpilation_depth, const std::string &directory) {
     std::vector<std::string> newTokens;
     if(injectExtras)
         newTokens.emplace_back("#include <ranges>\n#include <iostream>\n#include <vector>\n#include <memory>\n#include <string>\n#define print(message) std::cout<<(message)<<std::endl\n");
@@ -499,15 +499,20 @@ std::vector<std::string> transformTokens(const std::vector<std::string>& tokens,
                     newTokens.emplace_back("{");
                     std::cout << transpilation_depth <<  "→ " << tokens[i+7].substr(1, tokens[i+7].find_last_of('\"')-1) << ".cm" << std::endl;
                     //newTokens.emplace_back("#include "+tokens[i+7].substr(0, tokens[i+7].find_last_of('\"')) + ".cpp\"\n");
-                    std::ifstream infile(tokens[i+7].substr(1, tokens[i+7].find_last_of('\"')-1)+".cm");
+                    std::ifstream infile(tokens[i + 7].substr(1, tokens[i + 7].find_last_of('\"') - 1) + ".cm");
                     if (!infile.is_open()) {
-                        throw std::runtime_error("Could not open file: " + tokens[i+7].substr(1, tokens[i+7].find_last_of('\"')-1)+".cm");
+                        std::string filename = directory + "/" + tokens[i + 7].substr(1, tokens[i + 7].find_last_of('\"') - 1) + ".cm";
+                        infile.open(filename);
+                        if (!infile.is_open()) {
+                            throw std::runtime_error("Could not open file: " + filename);
+                        }
                     }
                     std::stringstream buffer;
                     buffer << infile.rdbuf();
                     infile.close();
                     std::vector<std::string> fileTokens = tokenize(buffer.str());
-                    fileTokens = transformTokens(fileTokens, false, preample, transpilation_depth+"  ");
+                    std::string newDirectory = directory+tokens[i+7].substr(1, tokens[i+7].find_last_of('/'));
+                    fileTokens = transformTokens(fileTokens, false, preample, transpilation_depth+"  ", newDirectory);
                     newTokens.insert(newTokens.end(), fileTokens.begin(), fileTokens.end());
                     namespaces.insert(tokens[i+1]);
                     i = i+9;
@@ -621,7 +626,7 @@ void processFile(const std::string& filename) {
     std::vector<std::string> tokens = tokenize(buffer.str());
     std::cout << "  Building: " << filename << std::endl;
     std::vector<std::string> preample;
-    tokens = transformTokens(tokens, true, preample, "    ");
+    tokens = transformTokens(tokens, true, preample, "    ", filename.substr(0, filename.find_last_of('/')));
     tokens.insert(tokens.begin(), preample.begin(), preample.end());
 
     std::string output_filename = filename.substr(0, filename.find_last_of('.')) + ".cpp";
@@ -661,14 +666,13 @@ void processFile(const std::string& filename) {
     outfile.close();
     std::cout << "  Compiling: " << output_filename << std::endl;
 
-
     std::string executable_name = filename.substr(0, filename.find_last_of('.'));
     std::string compile_command = "g++ " + output_filename + " -o "+executable_name+" -O2 -std=c++23";
     if (std::system(compile_command.c_str()) != 0) 
         std::cerr << "Failed to compile the generated code." << std::endl;
     std::string run_command = "./" + executable_name;
     std::cout << "  Running: " << run_command << std::endl;
-    std::cout << "------------------------" << std::endl;
+    std::cout << "--------------------------------------------" << std::endl;
     if (std::system(run_command.c_str()) != 0) 
         std::cerr << "Failed to run the generated code." << std::endl;
     //else
@@ -681,7 +685,7 @@ int main(int argc, char* argv[]) {
         std::cerr << "Usage: " << argv[0] << " <source.cm>" << std::endl;
         return 1;
     }
-    std::cout << "----- Cimple v0.1 ------" << std::endl;
+    std::cout << "--------------- Cimple v0.1 ----------------" << std::endl;
     processFile(argv[1]);
     return 0;
 }
