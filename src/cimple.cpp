@@ -187,7 +187,7 @@ std::string parseType(const std::vector<std::string>& tokens, int& pos, const st
 std::vector<std::string> transformTokens(const std::vector<std::string>& tokens, bool injectExtras, std::vector<std::string>& preample, const std::string &transpilation_depth, const std::string &directory) {
     std::vector<std::string> newTokens;
     if(injectExtras)
-        newTokens.emplace_back("#include <ranges>\n#include <iostream>\n#include <vector>\n#include <memory>\n#include <string>\n#define print(message) std::cout<<(message)<<std::endl\n");
+        newTokens.emplace_back("#include<atomic>\n#include <ranges>\n#include <iostream>\n#include <vector>\n#include <memory>\n#include <string>\n#define print(message) std::cout<<(message)<<std::endl\n");
     std::string fnName("");
     bool declaring = false;
     bool inConcept = false;
@@ -238,20 +238,48 @@ std::vector<std::string> transformTokens(const std::vector<std::string>& tokens,
         "\n"
     );
 
+
+    if(injectExtras)
+    newTokens.emplace_back(
+        "template <typename Iterable>\n"
+        "class LockedIterable {\n"
+        "private:\n"
+        "    Iterable& m_iterable;\n"
+        "public:\n"
+        "    Iterable& get() {return m_iterable;}\n"
+        "    LockedIterable(Iterable& iterable) : m_iterable(iterable) {m_iterable->lock();}\n"
+        "    ~LockedIterable() {m_iterable->unlock();}\n"
+        "    LockedIterable(const LockedIterable&) = delete;\n"
+        "    LockedIterable& operator=(const LockedIterable&) = delete;\n"
+        "    LockedIterable(LockedIterable&& other) noexcept : m_iterable(other.m_iterable) {other.m_iterable = nullptr;}\n"
+        "    LockedIterable& operator=(LockedIterable&& other) noexcept {\n"
+        "        if (this != &other) {m_iterable->unlock();m_iterable = other.m_iterable;other.m_iterable = nullptr;}\n"
+        "        return *this;\n"
+        "    }\n"
+        "    auto begin() const { return m_iterable->begin(); }\n"
+        "    auto end() const { return m_iterable->end(); }\n"
+        "};\n\n"
+    );
+
     if(injectExtras)
     newTokens.emplace_back(
         "template <typename T>\n"
         "class SafeVector {\n"
         "private:\n"
         "    std::vector<T> data;\n"
+        "    std::atomic<int> itercount;\n"
         "\n"
         "public:\n"
         "    SafeVector() = default;\n"
-        "    SafeVector(int size) : data(size) {}\n"
-        "    SafeVector(std::initializer_list<T> init) : data(init) {}\n"
+        "    SafeVector(int size) : data(size), itercount(0) {}\n"
+        "    SafeVector(std::initializer_list<T> init) : data(init), itercount(0) {}\n"
+        "    SafeVector(const SafeVector& other) = delete;\n"
+        "    SafeVector(SafeVector<T>&& other) : data(std::move(other.data)), itercount(0) {if(other.itercount) throw std::out_of_range(\"Cannot return a vector from within a loop.\");}\n"
         "    operator auto() const {return data.begin();} \n"
+        "    auto lock() { ++itercount; }\n"
+        "    auto unlock() { --itercount; }\n"
         "    auto begin() const { return data.begin(); }\n"
-        "     auto end() const { return data.end(); }\n"
+        "    auto end() const { return data.end(); }\n"
         "    size_t size() const { return data.size(); }\n"
         "    SafeVector* operator->() {return this;} // optimized away by -O2 \n"
         "    const SafeVector* operator->() const {return this;} // optimized away by -O2 \n"
@@ -269,11 +297,12 @@ std::vector<std::string> transformTokens(const std::vector<std::string>& tokens,
         "    }\n"
         "    void pop() {\n"
         "        if (data.empty()) throw std::out_of_range(\"Pop from empty SafeVector\");\n"
+        "        if (itercount) throw std::out_of_range(\"Cannot pop from an iterating vector.\");"
         "        data.pop_back();\n"
         "    }\n"
         "    void reserve(size_t size) { data.reserve(size); }\n"
-        "    void push(const T& value) { data.push_back(value); }\n"
-        "    void clear() { data.clear(); }\n"
+        "    void push(const T& value) { if (itercount) throw std::out_of_range(\"Cannot push to an iterating vector.\"); data.push_back(value); }\n"
+        "    void clear() { if (itercount) throw std::out_of_range(\"Cannot clear an iterating vector.\"); data.clear(); }\n"
         "    bool empty() const { return data.empty(); }\n"
         "};\n\n"
     );
@@ -353,6 +382,14 @@ std::vector<std::string> transformTokens(const std::vector<std::string>& tokens,
             std::cerr << "`const` is not allowed as it is automatically applied." << std::endl;
             exit(1);
         }
+        if(tokens[i]=="begin") {
+            std::cerr << "`begin` is not allowed as it is unsage and thus automatically applied when safeguards can be obtained" << std::endl;
+            exit(1);
+        }
+        if(tokens[i]=="end") {
+            std::cerr << "`end` is not allowed as it is unsage and thus automatically applied when safeguards can be obtained." << std::endl;
+            exit(1);
+        }
         if(tokens[i]=="-" && i<tokens.size()-1 && tokens[i+1]==">") {
             std::cerr << "`->` is not allowed, as it is automatically inferred. Use `.` instead." << std::endl;
             exit(1);
@@ -363,6 +400,23 @@ std::vector<std::string> transformTokens(const std::vector<std::string>& tokens,
         }
         if(tokens[i]=="in") {
             newTokens.emplace_back(":");
+            if(i<tokens.size()-1 && tokens[i+1]=="zip")
+                continue; // TODO: fix zip
+            int depth = 1;
+            i++;
+            newTokens.emplace_back("LockedIterable");
+            newTokens.emplace_back("(");
+            while(i<tokens.size()) {
+                newTokens.emplace_back(tokens[i]);
+                if(tokens[i]=="(")
+                    depth++;
+                if(tokens[i]==")")
+                    depth--;
+                if(depth==0)
+                    break;
+                i++;
+            }
+            newTokens.emplace_back(")");
             continue;
         }
         if(tokens[i]=="zip") {

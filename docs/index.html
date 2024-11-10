@@ -213,8 +213,8 @@ Execution finished</code></pre>
 func add(vector[double] x, vector[double] y) {
   var z = vector[double]();
   z.reserve(x.size());
-  for(vat [xvalue, yvalue] in zip(x, y))
-      z.push(xvalue+yvalue);
+  for(var [xvalue, yvalue] in zip(x, y))
+    z.push(xvalue+yvalue);
   return z;
 }
 func main() {

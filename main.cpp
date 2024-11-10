@@ -1,3 +1,4 @@
+#include<atomic>
 #include <ranges>
 #include <iostream>
 #include <vector>
@@ -45,18 +46,42 @@ SafeSharedPtr<T> make_safe_shared(Args&&... args) {
     return SafeSharedPtr<T>(std::make_shared<T>(std::forward<Args>(args)...));
 }
 
+ template <typename Iterable>
+class LockedIterable {
+private:
+    Iterable& m_iterable;
+public:
+    Iterable& get() {return m_iterable;}
+    LockedIterable(Iterable& iterable) : m_iterable(iterable) {m_iterable->lock();}
+    ~LockedIterable() {m_iterable->unlock();}
+    LockedIterable(const LockedIterable&) = delete;
+    LockedIterable& operator=(const LockedIterable&) = delete;
+    LockedIterable(LockedIterable&& other) noexcept : m_iterable(other.m_iterable) {other.m_iterable = nullptr;}
+    LockedIterable& operator=(LockedIterable&& other) noexcept {
+        if (this != &other) {m_iterable->unlock();m_iterable = other.m_iterable;other.m_iterable = nullptr;}
+        return *this;
+    }
+    auto begin() const { return m_iterable->begin(); }
+    auto end() const { return m_iterable->end(); }
+};
+
  template <typename T>
 class SafeVector {
 private:
     std::vector<T> data;
+    std::atomic<int> itercount;
 
 public:
     SafeVector() = default;
-    SafeVector(int size) : data(size) {}
-    SafeVector(std::initializer_list<T> init) : data(init) {}
+    SafeVector(int size) : data(size), itercount(0) {}
+    SafeVector(std::initializer_list<T> init) : data(init), itercount(0) {}
+    SafeVector(const SafeVector& other) = delete;
+    SafeVector(SafeVector<T>&& other) : data(std::move(other.data)), itercount(0) {if(other.itercount) throw std::out_of_range("Cannot return a vector from within a loop.");}
     operator auto() const {return data.begin();} 
+    auto lock() { ++itercount; }
+    auto unlock() { --itercount; }
     auto begin() const { return data.begin(); }
-     auto end() const { return data.end(); }
+    auto end() const { return data.end(); }
     size_t size() const { return data.size(); }
     SafeVector* operator->() {return this;} // optimized away by -O2 
     const SafeVector* operator->() const {return this;} // optimized away by -O2 
@@ -74,47 +99,17 @@ public:
     }
     void pop() {
         if (data.empty()) throw std::out_of_range("Pop from empty SafeVector");
-        data.pop_back();
+        if (itercount) throw std::out_of_range("Cannot pop from an iterating vector.");        data.pop_back();
     }
     void reserve(size_t size) { data.reserve(size); }
-    void push(const T& value) { data.push_back(value); }
-    void clear() { data.clear(); }
+    void push(const T& value) { if (itercount) throw std::out_of_range("Cannot push to an iterating vector."); data.push_back(value); }
+    void clear() { if (itercount) throw std::out_of_range("Cannot clear an iterating vector."); data.clear(); }
     bool empty() const { return data.empty(); }
 };
 
- using error=std::runtime_error;
-;
-struct LinkedNode{
-   LinkedNode* operator->() {return this;} // optimized away by -O2 
-   const LinkedNode* operator->() const {return this;} // optimized away by -O2 
-   LinkedNode(const LinkedNode& other) = default; 
-   LinkedNode(LinkedNode&& other) = default; 
-   double value;
-   SafeSharedPtr<LinkedNode>next;
-   SafeSharedPtr<LinkedNode>prev;
-   LinkedNode(double value){
-      this -> value=value;
-   }
-}
-;
-auto set_next(const SafeSharedPtr<LinkedNode>&from,const SafeSharedPtr<LinkedNode>&to){
-   from -> next=to;
-   to -> prev=from;
-}
-int main(){
-   auto node1=make_safe_shared<LinkedNode>(1);
-   auto node2=make_safe_shared<LinkedNode>(2);
-   auto node3=make_safe_shared<LinkedNode>(3);
-   set_next(node1,node2);
-   set_next(node2,node3);
-   try{
-      print(node1 -> value);
-      print(node1 -> next -> value);
-      print(node1 -> next -> next -> value);
-      print(node1 -> next -> next -> next -> value);
-   }
-   catch(error){
-      print("runtime error");
-   }
+ int main(){
+   auto vec=make_safe_shared<SafeVector<double>>();
+   vec -> push(1);
+   for(auto i:LockedIterable(vec))print(i);
    return 0;
 }
