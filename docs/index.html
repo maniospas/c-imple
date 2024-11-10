@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cimple</title>
+  <link href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+  <style>
+    body { display: flex; }
+    .sidebar {
+      width: 200px;
+      position: fixed;
+      top: 0;
+      bottom: 0;
+      background-color: #f8f9fa;
+      padding-top: 20px;
+    }
+    .content {
+      margin-left: 210px;
+      padding: 20px;
+    }
+    pre {
+      background-color: #2d2d2d;
+      padding: 15px;
+      border-radius: 5px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <h2 class="text-center">Cimple</h2>
+    <ul class="nav flex-column">
+      <li class="nav-item"><a class="nav-link" href="#setup">Setup</a></li>
+      <li class="nav-item"><a class="nav-link" href="#control-flow">Control flow</a></li>
+      <li class="nav-item"><a class="nav-link" href="#func-struct">Func & struct</a></li>
+      <li class="nav-item"><a class="nav-link" href="#memory-handlers">Memory handlers</a></li>
+      <li class="nav-item"><a class="nav-link" href="#import">Import</a></li>
+      <li class="nav-item"><a class="nav-link" href="#cpp">C++ integration</a></li>
+    </ul>
+  </div>
+
+  <!-- Main Content -->
+  <div class="content">
+    <h1 id="introduction">Cimple</h1>
+    <p><em>A memory safe C++ transpiler.</em></p>
+    <p>
+      This is a simple language (pun intended) that aims to transpile itself into safe yet performant C++ code that is then compiled with a system compiler, like GCC.
+      Mainly, structs are treaded similarly to dynamic languages in that they are passed by reference or even as shared pointers between functions. There is several
+      modifications to the C++ language in terms of syntax, and several non-safe features are disabled. This gives Cimply its own unique feel.
+      Currently, the transpilation is a code transformation, so error checking does not map back to the original code.</p>
+
+    <h2 id="setup">Setup</h2>
+    <p>Compile the language with the following command, or directly grab an executable from this repository, if there is one from your platform. Cimple requires GCC to work
+    already, so the compilation step also serves as an assertion that your platform is properly set up. Use a Rust highlighter. To start, create a first file like below and 
+    run it with cimple by passing its path like an argument. Notice that the source code has a <code>main</code> function (we are transpiling to C++ after all) and that a couple
+    more files are produced, namely the transpilation outcome and the produced executable. Cimple runs the executable for us. </p>
+    <pre><code class="language-rust">// main.cm
+func main() {
+  print("Hello world!");
+  return 0;
+}</code></pre>
+
+
+    <pre><code class="language-bash">> g++ src/cimple.cpp -o cimple -O2 -std=c++23
+> ./cimple main.cm
+--------------- Cimple v0.1 ----------------
+  Building: main.cm
+  Compiling: main.cpp
+  Running: ./main
+--------------------------------------------
+Hello world!</code></pre>
+
+
+
+    <h2 id="func-struct">Func & struct</h2>
+    <p>You can declare functions on the global scope with the <code>func</code> keyword. The return type of these is automatically inferred based on the returned value type.
+    Function declarations require some comma-separated arguments and an explicit prefix of those with their type. You may have polymorphic
+    functions (that is, the same function name defined for different types). 
+    Each program's entry point is the <code>main</code> function. Cimple also scopes variables within bracket blocks.
+    Use <code>var</code> to denote a new variable. Here is an example:
+    
+    </p>
+    <pre><code class="language-rust">// main.cm
+func add(double x, double y) {
+  return x + y;
+}
+func main() {
+  var result = add(1, 2);
+  print(result);
+}</code></pre>
+    <pre><code class="language-bash">> ./cimple main.cm
+--------------- Cimple v0.1 ----------------
+  Building: main.cm
+  Compiling: main.cpp
+  Running: ./main
+--------------------------------------------
+3</code></pre>
+
+    <p>The main data structure is a C-like struct.
+    This cannot have any private fields. Always
+    use <code>self</code> to access struct members. Also notice
+    the fullstop instead of <code>-></code>; the latter is not allowed.
+    This is shown in the next example, where a 2D point struct is declared. 
+    Methods that take structs as inputs jist use their name. Everything is made
+    a const reference under the hood. Method execution
+    allows internal modification of struct fields. Futhermore, there is no
+    copying involved. Here is an example.</p>
+    
+
+    <pre><code class="language-rust">// main.cm (fewer line breaks for legibility)
+struct Point {
+    double x;
+    double y;
+    Point(double x, double y) {self.x = x; self.y = y;}
+};
+func add(Point a, Point b) {return Point(a.x+b.x, a.y+b.y);}
+func main() {
+    var a = Point(1, 2);
+    var b = Point(1, 2);
+    var c = add(a, b);
+    print(c.x);
+    print(c.y);
+    return 0;
+}</code></pre>
+
+
+    <h2 id="memory-handlers">Memory handlers</h2>
+
+    <p>For typical structs, the stack unwinding of 
+    C++ is used so that everything is deallocated once
+    you leave the current scope. To create objects that 
+    live beyond their generating scope, evoke
+    a memory handler. Such handlers manage memory of 
+    a certain type with the syntax <code>handler[type]</code>.</p>
+
+    <p>Let us start with the <code>shared</code> handler.
+    This uses shared pointer semantics internally.
+    That is, it allows the safe creation of pointers
+    and their automatic deletion once they are no longer bound
+    to anything. In this strategy, there may be circular references, which 
+    would be memory leaks. Use the <code>unbind varname;</code>
+    syntax to remove references.
+    This remains memory safe, with a clear exception being
+    caught if an unbound variable is being accessed. However,
+    deletion timing may occur at any point in the code.
+    </p>
+
+    <p>The following snippet demonstrates usage of the 
+    <code>shared</code> handler. To begin with, shared struct instances
+    are explicitly declared. Notice that we also have usage of the
+    try-catch clause to catch the exception thrown by
+    memory safety. Error types can be obtained from the C++
+    standard library.</p>
+
+
+    <pre><code class="language-rust">//main.cm
+cimple.unsafe.inline(using error = std::runtime_error;);
+
+struct LinkedNode {
+  double value;
+  shared[LinkedNode] next;
+  shared[LinkedNode] prev;
+  LinkedNode(double value) {self.value = value;}
+};
+func set_next(shared[LinkedNode] from, shared[LinkedNode] to) {from.next = to; to.prev = from;}
+func main() {
+  var node1 = shared[LinkedNode](1);
+  var node2 = shared[LinkedNode](2);
+  var node3 = shared[LinkedNode](3);
+  set_next(node1, node2);
+  set_next(node2, node3);
+  try {
+    print(node1.value);
+    print(node1.next.value);
+    print(node1.next.next.value);
+    print(node1.next.next.next.value);
+  }
+  catch(error) {
+    print("runtime error");
+  }
+
+  return 0;
+}
+</code></pre>
+
+    <pre><code class="language-bash">./cimple main.cm
+--------------- Cimple v0.1 ----------------
+  Building: main.cm
+  Compiling: main.cpp
+  Running: ./main
+--------------------------------------------
+1
+2
+3
+runtime error
+Execution finished</code></pre>
+
+  <p>A second handler is <code>vector</code>, which stores a 
+  sequence of data based on the namesake standard library. 
+  Vector elements can be accessed or set with brackets <code>[]</code>,
+  or otherwise manipulated with push and pop methods. Contrary to typical
+  C++, this operation is made to check for bounds and may be slightly slower
+  for massive scale arithmetics. To reach the full speed potential without
+  losing safety, reserve vector memory beforehand and
+  traverse the vector through the iterator syntax <code>for(var value in vec){...}</code>.
+  Use the <code>zip</code> function to iterate through multiple vectors simultaneously.
+  Here is an example:</p>
+
+    <pre><code class="language-rust">//main.cm
+func add(vector[double] x, vector[double] y) {
+  var z = vector[double]();
+  z.reserve(x.size());
+  for(vat [xvalue, yvalue] in zip(x, y))
+      z.push(xvalue+yvalue);
+  return z;
+}
+func main() {
+  var x = vector[double]({1,2,3,4});
+  var y = vector[double]({1,2,3,4});
+  var z = add(x,y);
+  print(z[2]);
+  return 0;
+}</code></pre>
+
+
+
+    
+<h2 id="import">Import</h2>
+<p>The <code>import</code> statement imports Cimple files into a namespace.</p>
+
+<pre><code class="language-rust">/// data.cm
+struct Data {
+  vector[double] values;
+  Data(){}
+};</code></pre>
+
+
+
+<pre><code class="language-rust">//main.cm
+var lib = cimple.import("data");
+func main() {
+  var data = lib.Data();
+  data.values.push(0);
+  data.values.push(1);
+  double sum = 0;
+  for(var value in data.values)
+    sum += value;
+  print(value);
+  return 0;
+}</code></pre>
+
+
+  <h2 id="cpp">C++ integration</h2>
+  <p>Cimple gives you the option to integrate C++ code outside of its type definitions. In particular,
+  use <code>cimple.unsafe.include(libname);</code> to import a standard libary from its name, or enclose
+  the name in quotations to include a specific file at the preample of the transpilation's outcome so 
+  that it's visible to your whole project. When you write a command or at the right
+  hand side of an assignment, use <code>cimple.unsafe.inline(code)</code> to inline some C++ code. There are 
+  some basic safeguards for inlining code, such as avoiding preprocessor instructions. Here is an example:</p>
+
+  <pre><code class="language-rust">//time.cm
+cimple.unsafe.include(chrono); // basically #include &lt;chrono&gt;
+var now = cimple.unsafe.inline(std::chrono::high_resolution_clock::now);  // assigns the function pointer to a variable
+</code></pre>
+
+  <pre><code class="language-rust">//main.cm
+var time = cimple.import("time");
+func main() {
+  var tic = time.now();
+  print("Hello world!");
+  print(time.now()-tic);
+  return 0;
+}
+</code></pre>
+  </div>
+
+  <!-- Prism.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-rust.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+</body>
+</html>

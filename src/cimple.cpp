@@ -194,7 +194,6 @@ std::vector<std::string> transformTokens(const std::vector<std::string>& tokens,
     std::unordered_set<std::string> argNames;
     std::unordered_set<std::string> conceptNames;
     std::unordered_set<std::string> namespaces;
-    namespaces.insert("std");
     namespaces.insert("cimple");
     if(injectExtras)
         newTokens.emplace_back("\n#define string(message) std::to_string(message)\n");
@@ -485,6 +484,24 @@ std::vector<std::string> transformTokens(const std::vector<std::string>& tokens,
             if(tokens[i+7]!=")" || tokens[i+8]!=";")
                 throw std::runtime_error("Invalid unsafe include syntax.");
             i += 8;
+            continue;
+        }
+        if(i<tokens.size()-7 && tokens[i]=="cimple" && tokens[i+1]=="." && tokens[i+2]=="unsafe" && tokens[i+3]=="." && tokens[i+4]=="inline" && tokens[i+5]=="(") {
+            int depth = 1;
+            int pos = i+6;
+            while(pos<tokens.size()) {
+                if(tokens[pos]=="(")
+                    depth++;
+                if(tokens[pos]==")")
+                    depth--;
+                if(depth==0)
+                    break;
+                if(tokens[pos]=="#")
+                    throw std::runtime_error("For added safety, you cannot also not use preprocessor directives when inlining.");
+                newTokens.emplace_back(tokens[pos]);
+                pos++;
+            }
+            i = pos;
             continue;
         }
         if(tokens[i]=="var") {
