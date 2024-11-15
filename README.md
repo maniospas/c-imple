@@ -42,7 +42,8 @@ func main() {
 Exexute and run it like in the next snippet. Notice the various preparation
 steps as your code is transpiled in C++ and compiled with GCC.
 
-```bash ./cimple main.cm
+```bash
+./cimple main.cm
 --------------- Cimple v0.1 ----------------
   Building: main.cm
   Compiling: main.cpp

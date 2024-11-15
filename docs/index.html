@@ -74,6 +74,10 @@ func main() {
 Hello world!</code></pre>
 
 
+    <h2 id="control-flow">Control flow</h2>
+    Cimple follows C++ control flows, namely <code>if</code>, <code>for</code>, and <code>while</code> statements.
+
+
 
     <h2 id="func-struct">Func & struct</h2>
     <p>You can declare functions on the global scope with the <code>func</code> keyword. The return type of these is automatically inferred based on the returned value type.
@@ -150,10 +154,11 @@ func main() {
 
     <p>The following snippet demonstrates usage of the 
     <code>shared</code> handler. To begin with, shared struct instances
-    are explicitly declared. Notice that we also have usage of the
+    are explicitly declared. Skip the unsafe inlining at the beginning to 
+    get a data type from the C++ error library included by default.
+    Instead, notice that we also have usage of the
     try-catch clause to catch the exception thrown by
-    memory safety. Error types can be obtained from the C++
-    standard library.</p>
+    memory safety.</p>
 
 
     <pre><code class="language-rust">//main.cm
@@ -256,8 +261,8 @@ func main() {
   <h2 id="cpp">C++ integration</h2>
   <p>Cimple gives you the option to integrate C++ code outside of its type definitions. In particular,
   use <code>cimple.unsafe.include(libname);</code> to import a standard libary from its name, or enclose
-  the name in quotations to include a specific file at the preample of the transpilation's outcome so 
-  that it's visible to your whole project. When you write a command or at the right
+  the name in quotations to include a specific file. Inclusions are added at the preample of the transpilation's outcome so 
+  that they are visible throughout the whole project. When you write a command or at the right
   hand side of an assignment, use <code>cimple.unsafe.inline(code)</code> to inline some C++ code. There are 
   some basic safeguards for inlining code, such as avoiding preprocessor instructions. Here is an example:</p>
 

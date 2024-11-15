@@ -1,7 +1,25 @@
+//cimple.get("std/time.cm", "https://raw.githubusercontent.com/maniospas/c-imple/refs/heads/main/std/time.cm");
+var time = cimple.import("std/time");
+
+struct Number {
+    double value;
+    Number(double value) {
+        self.value = value;
+    }
+};
+
 func main() {
-    var vec = shared[vector[double]]();
-    vec.push(1);
-    for(var i in vec)
+    print(time.now());
+    var number = shared[Number].new(10);
+    print(number.value);
+
+
+    var x = shared[vector[double]].reserve(100);
+    x.push(0);
+    x.push(1);
+
+    for(var i in x)
         print(i);
+
     return 0;
 }

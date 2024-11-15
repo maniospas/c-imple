@@ -7,6 +7,7 @@
 #include <unordered_map>
 #include <cctype>
 #include <stdexcept>
+//#include "src/cget.h"
 
 
 bool isNumber(const std::string& str) {
@@ -87,7 +88,7 @@ std::vector<std::string> tokenize(const std::string& content) {
 static std::unordered_set<std::string> primitiveTypes = {"int", "double", "bool"};
 
 // Recursive function to parse types with nesting
-std::string parseType(const std::vector<std::string>& tokens, int& pos, const std::unordered_set<std::string>& conceptNames, bool declaring, bool& isConstructorCall) {
+std::string parseType(const std::vector<std::string>& tokens, int& pos, const std::unordered_set<std::string>& conceptNames, bool declaring, bool& isConstructorCall, int start_pos) {
     if (pos >= tokens.size()) {
         throw std::runtime_error("Unexpected end of tokens while parsing type.");
     }
@@ -107,7 +108,7 @@ std::string parseType(const std::vector<std::string>& tokens, int& pos, const st
             pos++; // Move past '['
 
             // Start parsing the nested type
-            std::string nestedType = parseType(tokens, pos, conceptNames, false, isConstructorCall);
+            std::string nestedType = parseType(tokens, pos, conceptNames, false, isConstructorCall, start_pos);
 
             // Expect closing ']'
             if (pos >= tokens.size() || tokens[pos] != "]") {
@@ -120,7 +121,7 @@ std::string parseType(const std::vector<std::string>& tokens, int& pos, const st
             while (lookahead < tokens.size() && tokens[lookahead] == " ") {
                 lookahead++;
             }
-            bool followedByParenthesis = (lookahead < tokens.size() && tokens[lookahead] == "(");
+            bool followedByParenthesis = lookahead < tokens.size() && (tokens[lookahead] == "(" || tokens[lookahead]==".");
 
             if (isShared && followedByParenthesis) {
                 // It's a constructor call
@@ -138,7 +139,7 @@ std::string parseType(const std::vector<std::string>& tokens, int& pos, const st
         }
         else if (current == "[") {
             pos++; // Move past '['
-            std::string nestedType = parseType(tokens, pos, conceptNames, false, isConstructorCall);
+            std::string nestedType = parseType(tokens, pos, conceptNames, false, isConstructorCall, start_pos);
             if (pos >= tokens.size() || tokens[pos] != "]") {
                 throw std::runtime_error("Expected ']' after '['");
             }
@@ -166,8 +167,21 @@ std::string parseType(const std::vector<std::string>& tokens, int& pos, const st
             if (declaring && !isConstructorCall) {
                 if (primitiveTypes.find(type) == primitiveTypes.end()) {
                     // Not a primitive type, convert to const Type&
-                    type = "const " + type + "&";
+                    //type = "const " + type + "&";
+                    type = type + "&";
                 }
+            }
+            
+            if(current==".") {
+                isConstructorCall = false;
+                // we are just after a templated type, so do something according to the next token
+                if(pos<tokens.size()-1 && tokens[pos+1]=="new") {
+                    pos+=2; // also skip "new"
+                    continue; // just continue and take the arguments
+                }
+                pos++;
+                type += "(); "+tokens[start_pos]+"->";
+                return type;
             }
 
             type += current;
@@ -390,6 +404,10 @@ std::vector<std::string> transformTokens(const std::vector<std::string>& tokens,
             std::cerr << "`end` is not allowed as it is unsage and thus automatically applied when safeguards can be obtained." << std::endl;
             exit(1);
         }
+        if(tokens[i]=="new") {
+            std::cerr << "`new` is not allowed unless in the pattern handler.new(constuctor arguments)." << std::endl;
+            exit(1);
+        }
         if(tokens[i]=="-" && i<tokens.size()-1 && tokens[i+1]==">") {
             std::cerr << "`->` is not allowed, as it is automatically inferred. Use `.` instead." << std::endl;
             exit(1);
@@ -427,6 +445,18 @@ std::vector<std::string> transformTokens(const std::vector<std::string>& tokens,
             newTokens.emplace_back("cimple_"+tokens[i]);
             continue;
         }
+        if(tokens[i]=="." && newTokens[newTokens.size()-1][newTokens[newTokens.size()-1].size()-1]=='>') {
+            // we are just after a templated type, so do something according to the next token
+            if(i<tokens.size()-1 && tokens[i+1]=="new") {
+                i++; // also skip "new"
+                continue; // just continue and take the arguments
+            }
+            newTokens.push_back("(");
+            newTokens.push_back("(");
+            newTokens.push_back("->");
+            continue;
+        }
+
         if(tokens[i]=="." && i && namespaces.find(tokens[i-1])!=namespaces.end() ) {
             newTokens.emplace_back(":");
             newTokens.emplace_back(":");
@@ -574,9 +604,8 @@ std::vector<std::string> transformTokens(const std::vector<std::string>& tokens,
                     if (!infile.is_open()) {
                         std::string filename = directory + "/" + tokens[i + 7].substr(1, tokens[i + 7].find_last_of('\"') - 1) + ".cm";
                         infile.open(filename);
-                        if (!infile.is_open()) {
+                        if (!infile.is_open()) 
                             throw std::runtime_error("Could not open file: " + filename);
-                        }
                     }
                     std::stringstream buffer;
                     buffer << infile.rdbuf();
@@ -642,7 +671,7 @@ std::vector<std::string> transformTokens(const std::vector<std::string>& tokens,
             int posCopy = i;
             bool isConstructorCall = false;
             try {
-                std::string parsedType = parseType(tokens, posCopy, conceptNames, declaring, isConstructorCall);
+                std::string parsedType = parseType(tokens, posCopy, conceptNames, declaring, isConstructorCall, i-2);
                 newTokens.emplace_back(parsedType);
                 i = posCopy - 1; // Adjust for loop increment
             }

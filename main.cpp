@@ -1,3 +1,5 @@
+#include <chrono>
+ 
 #include<atomic>
 #include <ranges>
 #include <iostream>
@@ -107,9 +109,29 @@ public:
     bool empty() const { return data.empty(); }
 };
 
- int main(){
-   auto vec=make_safe_shared<SafeVector<double>>();
-   vec -> push(1);
-   for(auto i:LockedIterable(vec))print(i);
+ 
+namespace cimple_time{
+   auto now=std::chrono::high_resolution_clock::now;
+}
+
+struct Number{
+   Number* operator->() {return this;} // optimized away by -O2 
+   const Number* operator->() const {return this;} // optimized away by -O2 
+   Number(const Number& other) = default; 
+   Number(Number&& other) = default; 
+   double value;
+   Number(double value){
+      this -> value=value;
+   }
+}
+;
+int main(){
+   print(cimple_time::now());
+   auto number=make_safe_shared<Number>(10);
+   print(number -> value);
+   auto x=make_safe_shared<SafeVector<double>>(); x-> reserve(100);
+   x-> push(0);
+   x-> push(1);
+   for(auto i:LockedIterable(x))print(i);
    return 0;
 }
